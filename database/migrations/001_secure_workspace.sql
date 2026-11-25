@@ -93,10 +93,20 @@ ALTER TABLE workspace_records FORCE ROW LEVEL SECURITY;
 ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_events FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS app_users_auth_lookup ON app_users;
+CREATE POLICY app_users_auth_lookup ON app_users
+  USING (current_setting('app.auth_mode', true) = 'on')
+  WITH CHECK (current_setting('app.auth_mode', true) = 'on');
+
 DROP POLICY IF EXISTS app_users_self ON app_users;
 CREATE POLICY app_users_self ON app_users
   USING (id = NULLIF(current_setting('app.user_id', true), '')::uuid)
   WITH CHECK (id = NULLIF(current_setting('app.user_id', true), '')::uuid);
+
+DROP POLICY IF EXISTS app_sessions_auth_lookup ON app_sessions;
+CREATE POLICY app_sessions_auth_lookup ON app_sessions
+  USING (current_setting('app.auth_mode', true) = 'on')
+  WITH CHECK (current_setting('app.auth_mode', true) = 'on');
 
 DROP POLICY IF EXISTS app_sessions_self ON app_sessions;
 CREATE POLICY app_sessions_self ON app_sessions
