@@ -26,3 +26,7 @@
  body[data-print-mode="fax"] #contractDraftOutput{top:130mm}
  body[data-print-mode="fax"] #faxCoverPreview{top:0}
 }
+
+.version-summary{padding:12px;background:#f5f8fd;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;font-size:13px}
+.version-change{color:#a04420}.version-same{color:#16845d;font-size:11px}
+#contractVersionResults table{min-width:680px}
