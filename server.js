@@ -8,7 +8,7 @@ const MIME = {".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8
 function send(res,status,body,type="application/json; charset=utf-8"){res.writeHead(status,{"Content-Type":type,"X-Content-Type-Options":"nosniff","Referrer-Policy":"strict-origin-when-cross-origin","X-Frame-Options":"DENY","Content-Security-Policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'"});res.end(body);}
 function readBody(req){return new Promise((resolve,reject)=>{let s="";req.on("data",c=>{s+=c;if(s.length>20000){reject(new Error("Request too large"));req.destroy();}});req.on("end",()=>{try{resolve(JSON.parse(s||"{}"));}catch{reject(new Error("Invalid JSON"));}});req.on("error",reject);});}
 const server=http.createServer(async(req,res)=>{
- if(req.method==="GET" && req.url==="/api/health") return send(res,200,JSON.stringify({ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY)}));
+ if(req.method==="GET" && req.url==="/api/health") return send(res,200,JSON.stringify({ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY)}));
  if(req.method==="POST" && req.url==="/api/ai/analyze"){
   try{
    const body=await readBody(req);
@@ -22,6 +22,31 @@ const server=http.createServer(async(req,res)=>{
    const answer=(data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n").trim();
    return send(res,200,JSON.stringify({answer:answer||"No text response returned."}));
   }catch(e){return send(res,400,JSON.stringify({error:e.message||"Unable to process request."}));}
+ }
+ if(req.method==="POST" && req.url==="/api/properties/search"){
+  try{
+   const body=await readBody(req);
+   if(!process.env.RENTCAST_API_KEY) return send(res,503,JSON.stringify({error:"Live property search is not connected yet. Add RENTCAST_API_KEY in Render Environment. Your key stays on the server."}));
+   const location=String(body.location||"").trim();
+   const params=new URLSearchParams();
+   if(/^\\d{5}$/.test(location)) params.set("zipCode",location);
+   else if(/^[A-Za-z]{2}$/.test(location)) params.set("state",location.toUpperCase());
+   else if(location.includes(",")){
+    const parts=location.split(",").map(x=>x.trim()).filter(Boolean);
+    if(parts.length<2 || parts[1].length!==2) return send(res,400,JSON.stringify({error:"For city searches, enter City, ST using the two-letter state abbreviation. For statewide searches, enter the two-letter state abbreviation."}));
+    params.set("city",parts[0]);params.set("state",parts[1].toUpperCase());
+   } else return send(res,400,JSON.stringify({error:"Enter a ZIP code, a two-letter state abbreviation (for example NJ), or City, ST. The provider does not return every U.S. listing in one request."}));
+   const min=Number(body.minPrice)||0,max=Number(body.maxPrice)||0;
+   if(min<0||max<0||(min&&max&&min>max)) return send(res,400,JSON.stringify({error:"Check the price range; the minimum cannot exceed the maximum."}));
+   if(min||max) params.set("price",(min?String(min):"*")+":"+(max?String(max):"*"));
+   params.set("status","Active");params.set("limit","20");
+   const url="https://api.rentcast.io/v1/listings/sale?"+params.toString();
+   const upstream=await fetch(url,{headers:{"Accept":"application/json","X-Api-Key":process.env.RENTCAST_API_KEY}});
+   const data=await upstream.json();
+   if(!upstream.ok) return send(res,502,JSON.stringify({error:data.message||data.error||"Property data provider request failed. Check the RentCast plan, API key and search location."}));
+   const listings=Array.isArray(data)?data:[];
+   return send(res,200,JSON.stringify({source:"RentCast",retrievedAt:new Date().toISOString(),count:listings.length,listings:listings.slice(0,20)}));
+  }catch(e){return send(res,502,JSON.stringify({error:e.message||"Unable to retrieve property listings."}));}
  }
  if(req.method!=="GET" && req.method!=="HEAD") return send(res,405,JSON.stringify({error:"Method not allowed"}));
  const pathname=decodeURIComponent((req.url||"/").split("?")[0]);
