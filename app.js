@@ -6,7 +6,7 @@ function persist(){localStorage.setItem(KEY,JSON.stringify(deals));renderAll()}
 function speakText(t){if(!("speechSynthesis" in window)){alert("Text-to-speech is not supported in this browser.");return}window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t||""));u.rate=.96;window.speechSynthesis.speak(u)}function stopSpeaking(){if("speechSynthesis" in window)window.speechSynthesis.cancel()}function money(n){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(Number(n)||0)}
 function num(v){return Number(v)||0}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function go(view){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+view));document.querySelectorAll(".navitem").forEach(x=>x.classList.toggle("active",x.dataset.view===view));document.getElementById("pageTitle").textContent=({dashboard:"Dashboard",deals:"Deal Analyzer",acquisition:"Acquisition Search",pipeline:"Deal Pipeline",completed:"Deals Completed & Revenue",documents:"Offer & Documents",assistant:"AI Assistant",diligence:"Due Diligence",finance:"Financing Lab",portfolio:"Portfolio Command Center",compare:"Deal Comparison",contracts:"Contracts & Counteroffers",crm:"Seller CRM",buyers:"Buyer Competition",autopilot:"AI Autopilot",settings:"Settings",contracts:"Contracts & Counteroffers",crm:"Seller CRM",buyers:"Buyer Competition",autopilot:"AI Autopilot"})[view]||"Dashboard";window.scrollTo({top:0,behavior:"smooth"})}
+function go(view){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+view));document.querySelectorAll(".navitem").forEach(x=>x.classList.toggle("active",x.dataset.view===view));document.getElementById("pageTitle").textContent=({dashboard:"Dashboard",deals:"Deal Analyzer",acquisition:"Acquisition Search",pipeline:"Deal Pipeline",completed:"Deals Completed & Revenue",documents:"Offer & Documents",assistant:"AI Assistant",diligence:"Due Diligence",finance:"Financing Lab",portfolio:"Portfolio Command Center",compare:"Deal Comparison",contracts:"Contracts & Counteroffers",motivated:"Motivated Seller Leads",crm:"Seller CRM",buyers:"Buyer Competition",autopilot:"AI Autopilot",settings:"Settings",contracts:"Contracts & Counteroffers",crm:"Seller CRM",buyers:"Buyer Competition",autopilot:"AI Autopilot"})[view]||"Dashboard";window.scrollTo({top:0,behavior:"smooth"})}
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
 document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
 document.getElementById("newDealBtn").onclick=()=>go("deals");
@@ -511,3 +511,77 @@ const webResearchSpeak=document.getElementById("webResearchSpeak");
 if(webResearchSpeak)webResearchSpeak.onclick=()=>{const t=document.getElementById("webResearchAI").textContent||webResearchSpeech||"Run an internet search first.";speakText(t)};
 const webResearchClear=document.getElementById("webResearchClear");
 if(webResearchClear)webResearchClear.onclick=()=>{webResearchItems=[];webResearchSpeech="";document.getElementById("webResearchResults").className="empty";document.getElementById("webResearchResults").textContent="Search results and extracted page content will appear here.";document.getElementById("webResearchAI").classList.add("hidden");document.getElementById("webResearchStatus").textContent="";document.getElementById("webResearchAnalyze").disabled=true};
+
+
+/* Motivated Seller Lead Command Center: authorized CSV import + local CRM ranking */
+const MOTIVATED_SOURCE="iSpeedToLead CSV / authorized import";
+function motivatedScore(s){
+ const text=[s.situation,s.notes,s.timeline,s.finance].join(" ").toLowerCase();
+ let urgency=0,signals=[];
+ const urgent=[["immediate",25],["0–30",25],["0-30",25],["behind on payments",22],["pre-foreclosure",24],["foreclosure",22],["vacant",14],["inherited",12],["needs repairs",10],["relocation",10],["divorce",12],["landlord exit",12]];
+ for(const [term,pts] of urgent){if(text.includes(term)){urgency+=pts;signals.push(term);}}
+ if(/31.?60|within 60|60 days/.test(text)){urgency+=15;signals.push("near-term timeline")}
+ else if(/61.?90|90 days/.test(text)){urgency+=8;signals.push("90-day timeline")}
+ if(/wants monthly income|seller financ|creative terms/.test(text)){urgency+=8;signals.push("possible creative-finance interest")}
+ if(s.follow&&new Date(s.follow)<new Date()){urgency+=5;signals.push("follow-up overdue")}
+ const ask=Number(s.price)||0,value=Number(s.estimatedValue)||0,rep=Number(s.repairs)||0;
+ const spread=value&&ask?value-ask:null,offerPct=Number(s.offerPct)||72,screenOffer=value?Math.max(0,value*offerPct/100-rep):null;
+ return {score:Math.min(100,urgency),signals:[...new Set(signals)],spread,screenOffer,financeFit:/seller financ|monthly income|creative terms/.test(text)};
+}
+function renderMotivatedLeads(){
+ const host=document.getElementById("motivatedLeadList");if(!host)return;
+ const filter=(document.getElementById("motivatedFilter")?.value||"").toLowerCase(),sort=document.getElementById("motivatedSort")?.value||"score";
+ let rows=sellerLeads.map(s=>({s,rank:motivatedScore(s)})).filter(x=>!filter||[x.s.address,x.s.name,x.s.state].join(" ").toLowerCase().includes(filter));
+ rows.sort((a,b)=>sort==="equity"?(b.rank.spread??-Infinity)-(a.rank.spread??-Infinity):sort==="newest"?String(b.s.created||"").localeCompare(String(a.s.created||"")):sort==="follow"?String(a.s.follow||"9999").localeCompare(String(b.s.follow||"9999")):b.rank.score-a.rank.score);
+ const nj=sellerLeads.filter(s=>/\bNJ\b|New Jersey/i.test(s.address||"")).length;
+ document.getElementById("motivatedLeadMetrics").innerHTML=[["Total imported / saved",sellerLeads.length],["New Jersey leads",nj],["Urgent signals",sellerLeads.filter(s=>motivatedScore(s).score>=35).length],["Possible seller-finance fit",sellerLeads.filter(s=>motivatedScore(s).financeFit).length]].map(x=>'<div class="portfolio-metric"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>').join("");
+ if(!rows.length){host.className="empty";host.textContent="No motivated seller leads yet. Import an authorized iSpeedToLead CSV or add a lead above.";return}
+ host.className="crm-list";host.innerHTML=rows.map(({s,rank})=>'<div class="crm-card"><div><b>'+esc(s.name||"Seller name not provided")+'</b><small>'+esc(s.address||"Address not provided")+' · '+esc(s.source||"Lead source not recorded")+'</small><small>Motivation: '+esc(s.situation||"Unknown")+' · Timeline: '+esc(s.timeline||"Unknown")+'</small><small>Finance signal: '+esc(s.finance||"Not discussed")+' · Follow-up: '+esc(dateLabel(s.follow))+'</small><small>Urgency signals: '+esc(rank.signals.join(", ")||"No urgency signals recorded")+'</small></div><div><span class="crm-flag">'+rank.score+'/100 priority</span><small>Est. value spread: '+(rank.spread===null?"Unknown":money(rank.spread))+'</small><small>Screening offer ceiling: '+(rank.screenOffer===null?"Unknown":money(rank.screenOffer))+'</small></div><div class="actions"><button class="textbtn" data-ml-ai="'+esc(s.id)+'">AI analyze & offer ideas</button><button class="textbtn" data-ml-crm="'+esc(s.id)+'">Open seller in CRM</button></div></div>').join("");
+ host.querySelectorAll("[data-ml-ai]").forEach(b=>b.onclick=()=>analyzeMotivatedLead(b.dataset.mlAi));
+ host.querySelectorAll("[data-ml-crm]").forEach(b=>b.onclick=()=>{const s=sellerLeads.find(x=>x.id===b.dataset.mlCrm);if(!s)return;go("crm");const sel=document.getElementById("sellerLogSelect");sel.value=s.id;renderSellerHistory();});
+}
+function parseMotivatedCSV(text){
+ const rows=[];let row=[],cell="",quoted=false;
+ for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'&&quoted&&text[i+1]==='"'){cell+='"';i++}else if(ch==='"'){quoted=!quoted}else if(ch===","&&!quoted){row.push(cell);cell=""}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&text[i+1]==="\n")i++;row.push(cell);if(row.some(v=>v.trim()))rows.push(row);row=[];cell=""}else cell+=ch}
+ row.push(cell);if(row.some(v=>v.trim()))rows.push(row);
+ if(rows.length<2)return [];
+ const headers=rows.shift().map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g," "));
+ const pick=(obj,terms)=>{const key=headers.find(h=>terms.some(t=>h===t||h.includes(t)));return key?String(obj[headers.indexOf(key)]||"").trim():""};
+ return rows.map(r=>{const o={};headers.forEach((h,i)=>o[h]=r[i]||"");return {
+ name:pick(o,["seller name","contact name","owner name","name","seller"]),
+ phone:pick(o,["phone","telephone","mobile"]),
+ email:pick(o,["email"]),
+ address:pick(o,["property address","address","property","street"]),
+ price:pick(o,["asking price","desired price","price","asking"]),
+ estimatedValue:pick(o,["estimated value","arv","market value"]),
+ repairs:pick(o,["repairs","repair estimate"]),
+ situation:pick(o,["motivation","reason","seller situation","reason for selling"]),
+ timeline:pick(o,["timeline","sell timeframe","timeframe"]),
+ finance:pick(o,["financing","seller financing","terms"]),
+ permission:pick(o,["consent","permission","contact permission"]),
+ notes:pick(o,["notes","description","details","comments"]),
+ source:"iSpeedToLead CSV import",created:new Date().toISOString(),history:[]
+ }}).filter(x=>x.address||x.name||x.phone);
+}
+function mergeMotivatedRows(rows){
+ let added=0,skipped=0;
+ for(const x of rows){const key=(x.address||"").toLowerCase().replace(/[^a-z0-9]/g,""),phone=(x.phone||"").replace(/\D/g,"");const exists=sellerLeads.some(s=>(key&&String(s.address||"").toLowerCase().replace(/[^a-z0-9]/g,"")===key)||(phone&&String(s.phone||"").replace(/\D/g,"")===phone));if(exists){skipped++;continue}
+ x.id=crypto.randomUUID?crypto.randomUUID():String(Date.now()+added);x.name=x.name||"Seller name not provided";x.contact="Phone";x.follow="";x.price=x.price||"";x.finance=x.finance||"Not discussed";sellerLeads.unshift(x);added++;
+ }
+ saveStore(CRMKEY,sellerLeads);renderSellerCRM();renderMotivatedLeads();return{added,skipped};
+}
+const motivatedCsvInput=document.getElementById("motivatedCsvFile");
+if(motivatedCsvInput)motivatedCsvInput.addEventListener("change",async e=>{const f=e.target.files?.[0];if(!f)return;document.getElementById("motivatedCsvText").value=await f.text();document.getElementById("motivatedImportStatus").textContent=f.name+" loaded. Tap Import leads into CRM."});
+const importMotivated=document.getElementById("importMotivatedCsv");
+if(importMotivated)importMotivated.onclick=()=>{const raw=document.getElementById("motivatedCsvText").value.trim();if(!raw){alert("Choose a CSV file or paste CSV text first.");return}const rows=parseMotivatedCSV(raw);if(!rows.length){alert("No lead rows were recognized. Include a header row and at least a seller name, phone or property address.");return}const result=mergeMotivatedRows(rows);document.getElementById("motivatedImportStatus").textContent=result.added+" leads imported; "+result.skipped+" duplicates skipped. Review the mapped fields before contacting anyone.";};
+const motivatedForm=document.getElementById("motivatedLeadForm");
+if(motivatedForm)motivatedForm.addEventListener("submit",e=>{e.preventDefault();const v=id=>document.getElementById(id).value.trim();const s={id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),name:v("mlName")||"Seller name not provided",phone:v("mlPhone"),email:v("mlEmail"),address:v("mlAddress"),price:v("mlAsk"),estimatedValue:v("mlValue"),repairs:v("mlRepairs"),offerPct:v("mlOfferPct"),situation:v("mlMotivation"),timeline:v("mlTimeline"),finance:v("mlFinance"),follow:v("mlFollow"),permission:v("mlPermission"),notes:v("mlNotes"),source:"Manual motivated seller lead",contact:"Phone",history:[],created:new Date().toISOString()};sellerLeads.unshift(s);saveStore(CRMKEY,sellerLeads);renderSellerCRM();renderMotivatedLeads();e.currentTarget.reset();alert("Lead saved to Seller CRM and ranked. No seller was contacted.");});
+["motivatedFilter","motivatedSort"].forEach(id=>document.getElementById(id)?.addEventListener("input",renderMotivatedLeads));
+async function analyzeMotivatedLead(id){
+ const s=sellerLeads.find(x=>x.id===id);if(!s)return;const rank=motivatedScore(s),box=document.getElementById("motivatedAI");box.classList.remove("hidden");box.textContent="AI is reviewing the seller signals and possible deal structures…";
+ const prompt="Analyze this real-estate motivated-seller lead for a New Jersey / U.S. investor. Separate recorded facts, seller-reported facts, AI interpretation and unknowns. Evaluate urgency, possible seller-financing fit, cash vs seller-finance negotiation questions, missing property valuation and due diligence, and a cautious offer discussion range only if the supplied figures support one. Explain that the calculated screen is not an appraisal, verified equity or an offer. Do not infer distress, mortgage delinquency, ownership, liens, title, contact consent or seller intent beyond recorded fields. Do not contact the seller, send an offer, sign or move money. The owner approves all actions. Lead: "+JSON.stringify({...s,screening:rank});
+ try{const r=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})}),d=await r.json();if(!r.ok)throw new Error(d.error||"AI analysis failed");box.textContent=d.answer||"No AI analysis returned.";speakText(box.textContent)}catch(e){box.textContent="AI analysis unavailable: "+e.message}
+}
+document.getElementById("readMotivatedLeads")?.addEventListener("click",()=>{const list=sellerLeads.map(s=>({s,r:motivatedScore(s)})).sort((a,b)=>b.r.score-a.r.score);speakText(list.length+" motivated seller leads. "+list.slice(0,10).map(x=>(x.s.name||"Seller")+", "+x.s.address+", priority "+x.r.score+" out of 100.").join(" "))});
+document.getElementById("exportMotivatedCsv")?.addEventListener("click",()=>{const cols=["name","phone","email","address","price","estimatedValue","repairs","situation","timeline","finance","follow","permission","notes","source"];const csv=[cols.join(","),...sellerLeads.map(s=>cols.map(k=>'"'+String(s[k]??"").replace(/"/g,'""')+'"').join(","))].join("\r\n");const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="owner-finance-motivated-seller-leads.csv";a.click();URL.revokeObjectURL(url)});
+renderMotivatedLeads();
