@@ -9,6 +9,62 @@ const PORT=Number(process.env.PORT||3000),ROOT=__dirname;
 const scrypt=promisify(crypto.scrypt);
 const MIME={".html":"text/html; charset=utf-8",".css":"text/css; charset=utf-8",".js":"text/javascript; charset=utf-8",".json":"application/json; charset=utf-8",".svg":"image/svg+xml"};
 const pool=process.env.DATABASE_URL?new Pool({connectionString:process.env.DATABASE_URL,max:5,connectionTimeoutMillis:5000,idleTimeoutMillis:30000,ssl:process.env.PGSSLMODE==="require"?{rejectUnauthorized:false}:undefined}):null;
+let dbReady=false;
+async function verifyDatabaseRole(){
+ if(!pool){dbReady=false;return}
+ try{
+  const q=await pool.query("SELECT current_user AS role_name,r.rolsuper,r.rolbypassrls,COALESCE(bool_and(t.relrowsecurity AND t.relforcerowsecurity AND pg_get_userbyid(t.relowner)<>current_user),false) AS tables_secured, count(t.oid)::int AS table_count FROM pg_roles r LEFT JOIN pg_class t ON t.relname=ANY(ARRAY['app_users','app_sessions','workspace_records','audit_events']) AND t.relnamespace='public'::regnamespace WHERE r.rolname=current_user GROUP BY current_user,r.rolsuper,r.rolbypassrls");
+  const t=q.rows[0];
+  const trig=await pool.query("SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.audit_events'::regclass AND tgname='audit_events_append_only' AND NOT tgisinternal) AS present");
+  dbReady=Boolean(t&&t.table_count===4&&!t.rolsuper&&!t.rolbypassrls&&t.tables_secured&&trig.rows[0].present);
+ }catch{dbReady=false}
+}
+function makeAdminPool(){if(!process.env.ADMIN_DATABASE_URL)return null;return new Pool({connectionString:process.env.ADMIN_DATABASE_URL,max:1,connectionTimeoutMillis:7000,idleTimeoutMillis:10000,ssl:process.env.PGSSLMODE==="require"?{rejectUnauthorized:false}:undefined})}
+async function provisionDatabase(req,res){
+ if(req.method!=="POST")return json(res,405,{error:"Method not allowed."});
+ if(!originOkay(req))return json(res,403,{error:"Request origin check failed."});
+ if(!rateLimit(req))return json(res,429,{error:"Too many attempts. Wait 15 minutes and try again."});
+ const expected=String(process.env.DB_SETUP_TOKEN||"");
+ if(expected.length<32)return json(res,503,{error:"Add a private DB_SETUP_TOKEN of at least 32 characters in Render Environment first."});
+ let body;try{body=await readBody(req,10000)}catch(e){return json(res,400,{error:e.message})}
+ const supplied=String(body.setupToken||"");
+ if(supplied.length!==expected.length||!crypto.timingSafeEqual(Buffer.from(supplied),Buffer.from(expected)))return json(res,403,{error:"Setup authorization failed."});
+ const admin=makeAdminPool();
+ if(!admin)return json(res,503,{error:"ADMIN_DATABASE_URL is not configured."});
+ let appUrl="";
+ try{
+  const check=await admin.query("SELECT current_database() AS db");
+  const rolePassword=crypto.randomBytes(36).toString("base64url");
+  await admin.query("DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='ofpm_app') THEN CREATE ROLE ofpm_app; END IF; END $");
+  await admin.query("ALTER ROLE ofpm_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+rolePassword+"'");
+  const migration=fs.readFileSync(path.join(ROOT,"database/migrations/001_secure_workspace.sql"),"utf8");
+  await admin.query(migration);
+  await admin.query("CREATE OR REPLACE FUNCTION public.prevent_audit_event_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $ BEGIN RAISE EXCEPTION 'audit_events is append-only'; END $");
+  await admin.query("DROP TRIGGER IF EXISTS audit_events_append_only ON public.audit_events");
+  await admin.query("CREATE TRIGGER audit_events_append_only BEFORE UPDATE OR DELETE ON public.audit_events FOR EACH ROW EXECUTE FUNCTION public.prevent_audit_event_mutation()");
+  const dbName='"'+String(check.rows[0].db).replace(/"/g,'""')+'"';
+  await admin.query("GRANT CONNECT ON DATABASE "+dbName+" TO ofpm_app");
+  await admin.query("GRANT USAGE ON SCHEMA public TO ofpm_app");
+  await admin.query("GRANT SELECT,INSERT,UPDATE ON TABLE public.app_users TO ofpm_app");
+  await admin.query("GRANT SELECT,INSERT,UPDATE ON TABLE public.app_sessions TO ofpm_app");
+  await admin.query("GRANT SELECT,INSERT,UPDATE,DELETE ON TABLE public.workspace_records TO ofpm_app");
+  await admin.query("GRANT SELECT,INSERT ON TABLE public.audit_events TO ofpm_app");
+  await admin.query("GRANT USAGE,SELECT ON SEQUENCE public.audit_events_id_seq TO ofpm_app");
+  const base=new URL(process.env.ADMIN_DATABASE_URL);
+  base.username="ofpm_app";base.password=rolePassword;
+  appUrl=base.toString();
+  const test=new Pool({connectionString:appUrl,max:1,connectionTimeoutMillis:7000,ssl:process.env.PGSSLMODE==="require"?{rejectUnauthorized:false}:undefined});
+  try{
+   const v=await test.query("SELECT current_user AS role_name,r.rolsuper,r.rolbypassrls FROM pg_roles r WHERE r.rolname=current_user");
+   const owned=await test.query("SELECT count(*)::int AS n FROM pg_class WHERE relname=ANY(ARRAY['app_users','app_sessions','workspace_records','audit_events']) AND relnamespace='public'::regnamespace AND pg_get_userbyid(relowner)=current_user");
+   const secured=await test.query("SELECT count(*)::int AS n FROM pg_class WHERE relname=ANY(ARRAY['app_users','app_sessions','workspace_records','audit_events']) AND relnamespace='public'::regnamespace AND relrowsecurity AND relforcerowsecurity");
+   const trigger=await test.query("SELECT EXISTS(SELECT 1 FROM pg_trigger WHERE tgrelid='public.audit_events'::regclass AND tgname='audit_events_append_only' AND NOT tgisinternal) AS present");
+   if(!v.rowCount||v.rows[0].rolsuper||v.rows[0].rolbypassrls||owned.rows[0].n!==0||secured.rows[0].n!==4||!trigger.rows[0].present)throw new Error("Restricted-role security verification did not pass.");
+  }finally{await test.end()}
+  return json(res,200,{ok:true,verified:true,appConnectionString:appUrl,message:"Database tables, forced row-level security, append-only audit protection, and restricted application role were created and verified. Copy the one-time connection string into Render DATABASE_URL, then remove ADMIN_DATABASE_URL and DB_SETUP_TOKEN."});
+ }catch(e){appUrl="";console.error("Database provisioning failed:",String(e.message||"unknown error").slice(0,240));return json(res,500,{error:"Database provisioning did not finish or verify. No connection string was issued. Check the database migration and Render logs, then retry."})}
+ finally{await admin.end().catch(()=>{})}
+}
 const attempts=new Map();
 function send(res,status,body,type="application/json; charset=utf-8",extra={}){res.writeHead(status,{...extra,"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"strict-origin-when-cross-origin","X-Frame-Options":"DENY","Content-Security-Policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'"});res.end(body)}
 function json(res,status,obj,extra={}){return send(res,status,JSON.stringify(obj),"application/json; charset=utf-8",extra)}
@@ -32,7 +88,7 @@ function workspaceKey(){const raw=String(process.env.WORKSPACE_ENCRYPTION_KEY||"
 function encryptWorkspace(value){const key=workspaceKey();if(!key)throw new Error("Workspace encryption key is not configured.");const nonce=crypto.randomBytes(12),cipher=crypto.createCipheriv("aes-256-gcm",key,nonce),ciphertext=Buffer.concat([cipher.update(JSON.stringify(value),"utf8"),cipher.final()]);return {nonce,authTag:cipher.getAuthTag(),ciphertext}}
 function decryptWorkspace(row){const key=workspaceKey();if(!key)throw new Error("Workspace encryption key is not configured.");const decipher=crypto.createDecipheriv("aes-256-gcm",key,row.nonce);decipher.setAuthTag(row.auth_tag);const plain=Buffer.concat([decipher.update(row.ciphertext),decipher.final()]).toString("utf8");return JSON.parse(plain)}
 async function handleWorkspace(req,res,url){
- if(!pool)return dbUnavailable(res);
+ if(!pool||!dbReady)return dbUnavailable(res);
  if(!workspaceKey())return json(res,503,{error:"Cloud storage is not activated. The server-side encryption key must be configured after database setup."});
  let user;try{user=await currentSession(req)}catch{return json(res,503,{error:"Account service temporarily unavailable."})}
  if(!user)return json(res,401,{error:"Sign in before using encrypted cloud storage."});
@@ -87,7 +143,8 @@ async function handleAuth(req,res,url){
 }
 const server=http.createServer(async(req,res)=>{
  const url=(req.url||"/").split("?")[0];
- if(req.method==="GET"&&url==="/api/health")return json(res,200,{ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY),databaseConfigured:Boolean(pool),cloudEncryptionConfigured:Boolean(workspaceKey())});
+ if(url==="/api/admin/provision-database")return provisionDatabase(req,res);
+ if(req.method==="GET"&&url==="/api/health")return json(res,200,{ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY),databaseConfigured:Boolean(pool),databaseReady:dbReady,databaseProvisioningAvailable:Boolean(process.env.ADMIN_DATABASE_URL&&String(process.env.DB_SETUP_TOKEN||"").length>=32),cloudEncryptionConfigured:Boolean(workspaceKey())});
  if(url.startsWith("/api/auth/"))return handleAuth(req,res,url);
  if(url.startsWith("/api/workspace/"))return handleWorkspace(req,res,url);
  if(req.method==="POST"&&url==="/api/ai/analyze"){
@@ -99,5 +156,5 @@ const server=http.createServer(async(req,res)=>{
  if(req.method!=="GET"&&req.method!=="HEAD")return json(res,405,{error:"Method not allowed"});
  const pathname=decodeURIComponent(url),rel=pathname==="/ "||pathname==="/"? "index.html":pathname.replace(/^\/+/, ""),target=path.resolve(ROOT,rel);if(!target.startsWith(ROOT+path.sep)&&target!==ROOT)return send(res,403,"Forbidden","text/plain");fs.readFile(target,(err,data)=>{if(err)return send(res,404,"Not found","text/plain; charset=utf-8");send(res,200,data,MIME[path.extname(target)]||"application/octet-stream")});
 });
-server.listen(PORT,"0.0.0.0",()=>console.log("Owner Finance AI listening on "+PORT));
+server.listen(PORT,"0.0.0.0",()=>{console.log("Owner Finance AI listening on "+PORT);verifyDatabaseRole()});
 process.on("SIGTERM",async()=>{server.close();if(pool)await pool.end();process.exit(0)});
