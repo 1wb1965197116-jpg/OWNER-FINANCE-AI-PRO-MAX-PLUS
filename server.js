@@ -87,7 +87,7 @@ async function handleAuth(req,res,url){
 }
 const server=http.createServer(async(req,res)=>{
  const url=(req.url||"/").split("?")[0];
- if(req.method==="GET"&&url==="/api/health")return json(res,200,{ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY),databaseConfigured:Boolean(pool)});
+ if(req.method==="GET"&&url==="/api/health")return json(res,200,{ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY),databaseConfigured:Boolean(pool),cloudEncryptionConfigured:Boolean(workspaceKey())});
  if(url.startsWith("/api/auth/"))return handleAuth(req,res,url);
  if(url.startsWith("/api/workspace/"))return handleWorkspace(req,res,url);
  if(req.method==="POST"&&url==="/api/ai/analyze"){
