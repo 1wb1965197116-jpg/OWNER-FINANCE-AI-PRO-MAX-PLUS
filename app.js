@@ -546,7 +546,7 @@ function parseMotivatedCSV(text){
  row.push(cell);if(row.some(v=>v.trim()))rows.push(row);
  if(rows.length<2)return [];
  const headers=rows.shift().map(x=>x.trim().toLowerCase().replace(/[^a-z0-9]+/g," "));
- const pick=(obj,terms)=>{const key=headers.find(h=>terms.some(t=>h===t||h.includes(t)));return key?String(obj[headers.indexOf(key)]||"").trim():""};
+ const pick=(obj,terms)=>{const key=headers.find(h=>terms.some(t=>h===t||h.includes(t)));return key?String(obj[key]||"").trim():""};
  return rows.map(r=>{const o={};headers.forEach((h,i)=>o[h]=r[i]||"");return {
  name:pick(o,["seller name","contact name","owner name","name","seller"]),
  phone:pick(o,["phone","telephone","mobile"]),
