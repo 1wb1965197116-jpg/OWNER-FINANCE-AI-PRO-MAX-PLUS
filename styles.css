@@ -39,3 +39,10 @@
 .backup-panel{margin-top:16px}.backup-panel .formgrid{margin:14px 0}.vault-error{color:#b42318!important}
 
 .web-research-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.web-research-card{display:grid;gap:10px;border:1px solid var(--line);border-radius:10px;padding:15px;background:#fff;min-width:0}.web-research-card b{font-size:13px}.web-research-card p{font-size:12px;color:var(--muted);margin:6px 0}.web-research-card small{font-size:11px;color:var(--muted)}.web-research-card a{font-size:12px;color:var(--blue);overflow-wrap:anywhere}.web-research-card button{justify-self:start}@media(max-width:620px){.web-research-grid{grid-template-columns:1fr}}
+
+
+.motivated-lead-badge{font-weight:800}
+#motivatedLeadList .crm-card{grid-template-columns:minmax(0,1fr) auto}
+#motivatedLeadList .crm-card small{overflow-wrap:anywhere}
+#motivatedLeadList .crm-card>div:nth-child(2){text-align:right}
+@media(max-width:620px){#motivatedLeadList .crm-card{grid-template-columns:1fr}#motivatedLeadList .crm-card>div:nth-child(2){text-align:left}}
