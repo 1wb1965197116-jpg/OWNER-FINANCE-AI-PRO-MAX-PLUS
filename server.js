@@ -153,6 +153,41 @@ const server=http.createServer(async(req,res)=>{
  if(req.method==="POST"&&url==="/api/ai/analyze"){
   try{const body=await readBody(req),prompt=String(body.prompt||"").trim();if(!prompt||prompt.length>12000)return json(res,400,{error:"Enter a prompt under 12,000 characters."});if(!process.env.OPENAI_API_KEY)return json(res,503,{error:"AI is not connected yet. Add OPENAI_API_KEY in your hosting provider's environment settings."});const system="You are an analytical real-estate acquisition assistant for a U.S. investor. Analyze only facts provided. Never invent property facts, comparable sales, rents, legal rules, title status, tax status, lender approval, or market data. Identify assumptions and missing diligence. Distinguish estimates from verified facts. Do not provide legal, tax, lending, or investment advice as a licensed professional. Never execute offers, sign contracts, move money, contact sellers, or represent that an action was completed. The user must approve all offers, contracts, and money movement. For creative finance, flag due-on-sale, existing-loan consent, insurance, title, servicing, disclosure, and state-law review.";const response=await fetch("https://api.openai.com/v1/responses",{method:"POST",headers:{"Authorization":"Bearer "+process.env.OPENAI_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-4.1-mini",instructions:system,input:prompt})});const data=await response.json();if(!response.ok)return json(res,502,{error:data.error?.message||"AI provider request failed."});const answer=(data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==="output_text").map(x=>x.text).join("\n").trim();return json(res,200,{answer:answer||"No text response returned."})}catch(e){return json(res,400,{error:e.message||"Unable to process request."})}
  }
+
+ if(req.method==="POST"&&url==="/api/research/search"){
+  if(!originOkay(req))return json(res,403,{error:"Request origin check failed."});
+  if(!rateLimit(req))return json(res,429,{error:"Research limit reached for this session. Wait 15 minutes and try again."});
+  try{
+   const body=await readBody(req,12000),query=String(body.query||"").trim(),location=String(body.location||"").trim();
+   if(!query||query.length>500)return json(res,400,{error:"Enter a research query under 500 characters."});
+   if(!process.env.FIRECRAWL_API_KEY)return json(res,503,{error:"Internet research is not connected yet. Add FIRECRAWL_API_KEY in Render Environment."});
+   const limit=Math.max(3,Math.min(8,Number(body.limit)||5));
+   const payload={query:query+(location?" in "+location:""),limit,sources:["web"],scrapeOptions:{formats:["markdown"],onlyMainContent:true}};
+   const upstream=await fetch("https://api.firecrawl.dev/v2/search",{method:"POST",headers:{"Authorization":"Bearer "+process.env.FIRECRAWL_API_KEY,"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(payload),signal:AbortSignal.timeout(60000)});
+   const data=await upstream.json().catch(()=>({}));
+   if(!upstream.ok)return json(res,502,{error:data.error||data.message||"Internet search provider request failed."});
+   const raw=Array.isArray(data.data)?data.data:(Array.isArray(data.web)?data.web:(Array.isArray(data.data?.web)?data.data.web:[]));
+   const results=raw.slice(0,limit).map((item)=>({title:String(item.title||item.metadata?.title||"Untitled page").slice(0,300),url:String(item.url||item.metadata?.sourceURL||""),description:String(item.description||item.metadata?.description||item.snippet||"").slice(0,1200),markdown:String(item.markdown||item.content?.markdown||item.content||"").slice(0,10000)})).filter(x=>/^https?:\/\//i.test(x.url));
+   return json(res,200,{source:"Firecrawl",query,location,retrievedAt:new Date().toISOString(),count:results.length,results});
+  }catch(e){return json(res,502,{error:e.name==="TimeoutError"?"Internet search timed out. Try again with a narrower search.":e.message||"Internet search failed."})}
+ }
+ if(req.method==="POST"&&url==="/api/research/scrape"){
+  if(!originOkay(req))return json(res,403,{error:"Request origin check failed."});
+  if(!rateLimit(req))return json(res,429,{error:"Scraper limit reached for this session. Wait 15 minutes and try again."});
+  try{
+   const body=await readBody(req,12000),rawUrl=String(body.url||"").trim();
+   if(!rawUrl||rawUrl.length>2000)return json(res,400,{error:"Enter a valid webpage URL."});
+   let parsed;try{parsed=new URL(rawUrl)}catch{return json(res,400,{error:"Enter a complete URL beginning with https://"});}
+   const host=parsed.hostname.toLowerCase(),blocked=host==="localhost"||host.endsWith(".localhost")||host.endsWith(".local")||host==="127.0.0.1"||host==="0.0.0.0"||host==="::1"||/^10\./.test(host)||/^192\.168\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+   if(!["http:","https:"].includes(parsed.protocol)||parsed.username||parsed.password||blocked)return json(res,400,{error:"Only public HTTP or HTTPS webpages can be scraped."});
+   if(!process.env.FIRECRAWL_API_KEY)return json(res,503,{error:"Internet research is not connected yet. Add FIRECRAWL_API_KEY in Render Environment."});
+   const upstream=await fetch("https://api.firecrawl.dev/v2/scrape",{method:"POST",headers:{"Authorization":"Bearer "+process.env.FIRECRAWL_API_KEY,"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({url:parsed.toString(),formats:["markdown"],onlyMainContent:true}),signal:AbortSignal.timeout(60000)});
+   const data=await upstream.json().catch(()=>({}));
+   if(!upstream.ok)return json(res,502,{error:data.error||data.message||"Page scraping provider request failed."});
+   const doc=data.data||data;
+   return json(res,200,{source:"Firecrawl",url:doc.metadata?.sourceURL||parsed.toString(),title:doc.metadata?.title||"Scraped webpage",markdown:String(doc.markdown||"").slice(0,16000),retrievedAt:new Date().toISOString()});
+  }catch(e){return json(res,502,{error:e.name==="TimeoutError"?"Page scraping timed out. Try again.":e.message||"Page scraping failed."})}
+ }
  if(req.method==="POST"&&url==="/api/properties/search"){
   try{const body=await readBody(req);if(!process.env.RENTCAST_API_KEY)return json(res,503,{error:"Live property search is not connected yet. Add RENTCAST_API_KEY in Render Environment."});const location=String(body.location||"").trim(),params=new URLSearchParams();if(/^\\d{5}$/.test(location))params.set("zipCode",location);else if(/^[A-Za-z]{2}$/.test(location))params.set("state",location.toUpperCase());else if(location.includes(",")){const parts=location.split(",").map(x=>x.trim()).filter(Boolean);if(parts.length<2||parts[1].length!==2)return json(res,400,{error:"Enter City, ST or a two-letter state abbreviation."});params.set("city",parts[0]);params.set("state",parts[1].toUpperCase())}else return json(res,400,{error:"Enter a ZIP code, state abbreviation or City, ST."});const min=Number(body.minPrice)||0,max=Number(body.maxPrice)||0;if(min<0||max<0||(min&&max&&min>max))return json(res,400,{error:"Check the price range."});if(min||max)params.set("price",(min?String(min):"*")+":"+(max?String(max):"*"));params.set("status","Active");params.set("limit","20");const upstream=await fetch("https://api.rentcast.io/v1/listings/sale?"+params.toString(),{headers:{"Accept":"application/json","X-Api-Key":process.env.RENTCAST_API_KEY}});const data=await upstream.json();if(!upstream.ok)return json(res,502,{error:data.message||data.error||"Property data provider request failed."});const listings=Array.isArray(data)?data:[];return json(res,200,{source:"RentCast",retrievedAt:new Date().toISOString(),count:listings.length,listings:listings.slice(0,20)})}catch(e){return json(res,502,{error:e.message||"Unable to retrieve property listings."})}
  }
