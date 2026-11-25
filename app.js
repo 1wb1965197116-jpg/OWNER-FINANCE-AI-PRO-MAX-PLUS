@@ -6,7 +6,7 @@ function persist(){localStorage.setItem(KEY,JSON.stringify(deals));renderAll()}
 function speakText(t){if(!("speechSynthesis" in window)){alert("Text-to-speech is not supported in this browser.");return}window.speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t||""));u.rate=.96;window.speechSynthesis.speak(u)}function stopSpeaking(){if("speechSynthesis" in window)window.speechSynthesis.cancel()}function money(n){return new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}).format(Number(n)||0)}
 function num(v){return Number(v)||0}
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function go(view){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+view));document.querySelectorAll(".navitem").forEach(x=>x.classList.toggle("active",x.dataset.view===view));document.getElementById("pageTitle").textContent=({dashboard:"Dashboard",deals:"Deal Analyzer",pipeline:"Deal Pipeline",documents:"Offer & Documents",assistant:"AI Assistant",settings:"Settings"})[view]||"Dashboard";window.scrollTo({top:0,behavior:"smooth"})}
+function go(view){document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x.id==="view-"+view));document.querySelectorAll(".navitem").forEach(x=>x.classList.toggle("active",x.dataset.view===view));document.getElementById("pageTitle").textContent=({dashboard:"Dashboard",deals:"Deal Analyzer",acquisition:"Acquisition Search",pipeline:"Deal Pipeline",documents:"Offer & Documents",assistant:"AI Assistant",settings:"Settings"})[view]||"Dashboard";window.scrollTo({top:0,behavior:"smooth"})}
 document.querySelectorAll("[data-view]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.view)));
 document.querySelectorAll("[data-go]").forEach(b=>b.addEventListener("click",()=>go(b.dataset.go)));
 document.getElementById("newDealBtn").onclick=()=>go("deals");
@@ -31,4 +31,33 @@ document.getElementById("askAI").onclick=async()=>{const prompt=document.getElem
 document.getElementById("speakAI").onclick=()=>speakText(document.getElementById("aiAnswer").textContent);document.getElementById("stopAI").onclick=stopSpeaking;async function checkHealth(){try{const r=await fetch("/api/health"),d=await r.json(),s=d.aiConfigured?"AI connected":"AI key not configured";document.getElementById("aiStatus").textContent=s;document.getElementById("settingsAI").textContent=s}catch{document.getElementById("aiStatus").textContent="Server unavailable";document.getElementById("settingsAI").textContent="Deploy Node server to enable AI"}}
 document.getElementById("exportData").onclick=()=>{const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),deals},null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="owner-finance-ai-deals.json";a.click();URL.revokeObjectURL(url)};
 document.getElementById("clearData").onclick=()=>{if(!confirm("Permanently delete all deal data saved in this browser? Export a backup first if needed."))return;deals=[];persist();document.getElementById("analysisResult").classList.add("hidden");document.getElementById("offerOutput").classList.add("hidden")};
-renderAll();checkHealth();
+
+function buildAcquisitionSearch(){
+ const location=document.getElementById("acqLocation").value.trim()||"United States";
+ const min=document.getElementById("acqMin").value.trim(),max=document.getElementById("acqMax").value.trim();
+ const type=document.getElementById("acqType").value,strategy=document.getElementById("acqStrategy").value,priority=document.getElementById("acqPriority").value;
+ const price=(min||max)?(" price "+(min?"over $"+min:"")+(min&&max?" and":"")+(max?" under $"+max:"")):"";
+ const typeTerm=type==="Any property type"?"investment property":type;
+ const strategyTerms={"All strategies":"investment property for sale","Owner financing":"owner financing OR owner carry","Seller financing":"seller financing OR seller carryback","Motivated seller":"motivated seller OR must sell OR distressed property","For sale by owner (FSBO)":"for sale by owner FSBO","Subject-to / existing mortgage":"subject to existing mortgage real estate","Lease option":"lease option real estate","Foreclosure / auction":"foreclosure OR auction property","Off-market investment property":"off market investment property"};
+ const term=(strategyTerms[strategy]||"investment property")+" "+typeTerm+" "+location+price;
+ const q=s=>encodeURIComponent(s);
+ const sources=[
+  ["Broad web search","https://www.google.com/search?q="+q(term)],
+  ["Owner-financed listings","https://www.google.com/search?q="+q('"owner financing" OR "seller financing" '+typeTerm+" "+location)],
+  ["For-sale-by-owner leads","https://www.google.com/search?q="+q('"for sale by owner" '+typeTerm+" "+location+price)],
+  ["Motivated / distressed sellers","https://www.google.com/search?q="+q('"motivated seller" OR "must sell" OR distressed '+typeTerm+" "+location)],
+  ["Zillow search","https://www.google.com/search?q="+q("site:zillow.com "+typeTerm+" "+location+price)],
+  ["Realtor.com search","https://www.google.com/search?q="+q("site:realtor.com "+typeTerm+" "+location+price)],
+  ["Redfin search","https://www.google.com/search?q="+q("site:redfin.com "+typeTerm+" "+location+price)],
+  ["Auction / foreclosure leads","https://www.google.com/search?q="+q("foreclosure auction "+typeTerm+" "+location)]
+ ];
+ if(strategy==="Owner financing"||strategy==="Seller financing"||strategy==="Subject-to / existing mortgage"||strategy==="Lease option") sources.unshift(["Creative-finance seller leads","https://www.google.com/search?q="+q('"'+strategyTerms[strategy]+'" '+typeTerm+" "+location)]);
+ const box=document.getElementById("acqResults");
+ box.classList.remove("empty");
+ box.innerHTML='<div class="search-intro"><b>Search brief</b><p>'+esc(typeTerm)+' · '+esc(location)+' · '+esc(strategy)+' · '+esc(price||"Any price")+' · '+esc(priority)+'</p><small>These are live search links, not a feed of verified listings. Review each result and confirm details at the source.</small></div><div class="source-grid">'+sources.map(([name,url])=>'<a class="source-link" href="'+url+'" target="_blank" rel="noopener noreferrer"><b>'+esc(name)+'</b><span>Open current search ↗</span></a>').join("")+'</div>';
+ window.lastAcqSpeech="Nationwide acquisition search prepared. Location: "+location+". Property type: "+type+". Strategy: "+strategy+". Price range: "+(min?"at least "+money(min):"no minimum")+" to "+(max?money(max):"no maximum")+". I created "+sources.length+" search destinations. These are search links, not verified property leads. Confirm active status, seller terms, title, condition, rents, taxes and all costs before making an offer.";
+ return window.lastAcqSpeech;
+}
+document.getElementById("acquisitionForm").addEventListener("submit",e=>{e.preventDefault();buildAcquisitionSearch()});
+document.getElementById("speakSearch").onclick=()=>speakText(window.lastAcqSpeech||buildAcquisitionSearch());
+\nrenderAll();checkHealth();
