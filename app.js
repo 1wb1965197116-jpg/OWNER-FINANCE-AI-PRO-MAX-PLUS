@@ -54,6 +54,55 @@ document.getElementById("approveOffer").onclick=()=>{const d=deals.find(x=>x.id=
 document.getElementById("documentDeal").onchange=()=>{const d=deals.find(x=>x.id===document.getElementById("documentDeal").value);document.getElementById("offerOutput").classList.add("hidden");document.getElementById("approveOffer").disabled=!d?.offerDraft;if(d?.offerDraft){document.getElementById("offerOutput").textContent=d.offerDraft;document.getElementById("offerOutput").classList.remove("hidden")}};
 document.getElementById("askAI").onclick=async()=>{const prompt=document.getElementById("aiPrompt").value.trim(),out=document.getElementById("aiAnswer"),btn=document.getElementById("askAI");if(!prompt){alert("Enter a question first.");return}btn.disabled=true;btn.textContent="Analyzing…";out.classList.remove("hidden");out.textContent="Working…";try{const r=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})}),data=await r.json();out.textContent=data.answer||data.error||"No response received.";document.getElementById("speakAI").disabled=!data.answer;document.getElementById("stopAI").disabled=!data.answer}catch{out.textContent="AI service is unavailable. Deploy the Node server and configure its API key to enable AI."}finally{btn.disabled=false;btn.textContent="Analyze with AI"}};
 document.getElementById("speakAI").onclick=()=>speakText(document.getElementById("aiAnswer").textContent);document.getElementById("stopAI").onclick=stopSpeaking;async function checkHealth(){try{const r=await fetch("/api/health"),d=await r.json(),s=d.aiConfigured?"AI connected":"AI key not configured";document.getElementById("aiStatus").textContent=s;document.getElementById("settingsAI").textContent=s;document.getElementById("propertyDataStatus").textContent=d.rentcastConfigured?"Live listings connected":"RentCast key needed"}catch{document.getElementById("aiStatus").textContent="Server unavailable";document.getElementById("settingsAI").textContent="Deploy Node server to enable AI";document.getElementById("propertyDataStatus").textContent="Connection unavailable"}}
+
+/* Password-encrypted local workspace backup. Data never leaves this browser. */
+const VAULT_ALLOWED_PREFIX="ofpmplus_";
+function vaultBytesToBase64(bytes){let binary="";for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);return btoa(binary)}
+function vaultBase64ToBytes(value){const binary=atob(value);const bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return bytes}
+function vaultRecords(){const records={};for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k===KEY||k.startsWith(VAULT_ALLOWED_PREFIX)){const raw=localStorage.getItem(k);try{records[k]=JSON.parse(raw)}catch{throw new Error("A saved workspace record could not be read: "+k)}}}if(!Array.isArray(records[KEY]))records[KEY]=deals;return records}
+async function vaultDeriveKey(passphrase,salt){const material=await crypto.subtle.importKey("raw",new TextEncoder().encode(passphrase),"PBKDF2",false,["deriveKey"]);return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:310000,hash:"SHA-256"},material,{name:"AES-GCM",length:256},false,["encrypt","decrypt"])}
+function vaultStatus(message,isError=false){const el=document.getElementById("vaultStatus");if(el){el.textContent=message;el.classList.toggle("vault-error",isError)}}
+document.getElementById("createEncryptedBackup").onclick=async()=>{
+ const pass=document.getElementById("vaultPassphrase").value,confirmPass=document.getElementById("vaultPassphraseConfirm").value,btn=document.getElementById("createEncryptedBackup");
+ if(pass.length<12){vaultStatus("Use a passphrase with at least 12 characters.",true);return}
+ if(pass!==confirmPass){vaultStatus("The passphrases do not match.",true);return}
+ if(!window.crypto?.subtle){vaultStatus("This browser does not support the required encryption feature. Try an up-to-date browser over HTTPS.",true);return}
+ btn.disabled=true;vaultStatus("Encrypting your workspace on this device…");
+ try{
+  const records=vaultRecords(),plain=new TextEncoder().encode(JSON.stringify({format:"OFPMPLUS-ENCRYPTED-BACKUP",version:1,createdAt:new Date().toISOString(),records}));
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await vaultDeriveKey(pass,salt);
+  const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,plain));
+  const envelope={format:"OFPMPLUS-VAULT",version:1,kdf:"PBKDF2-SHA256",iterations:310000,cipher:"AES-256-GCM",salt:vaultBytesToBase64(salt),iv:vaultBytesToBase64(iv),data:vaultBytesToBase64(cipher)};
+  const blob=new Blob([JSON.stringify(envelope)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="owner-finance-ai-pro-max-plus-"+new Date().toISOString().slice(0,10)+".ofpmvault";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+  vaultStatus("Encrypted backup created. Store the file and passphrase separately. Records remain on this device.");
+ }catch(e){vaultStatus("Backup failed: "+(e.message||"Unable to encrypt the workspace."),true)}
+ finally{btn.disabled=false}
+};
+document.getElementById("chooseEncryptedBackup").onclick=()=>document.getElementById("encryptedBackupFile").click();
+document.getElementById("encryptedBackupFile").onchange=async ev=>{
+ const file=ev.target.files?.[0];if(!file)return;
+ const pass=document.getElementById("vaultPassphrase").value;
+ if(!pass){vaultStatus("Enter the backup passphrase first, then choose Restore encrypted backup.",true);ev.target.value="";return}
+ if(file.size>25*1024*1024){vaultStatus("This backup is larger than the 25 MB safety limit.",true);ev.target.value="";return}
+ if(!window.crypto?.subtle){vaultStatus("This browser does not support the required decryption feature.",true);ev.target.value="";return}
+ try{
+  const envelope=JSON.parse(await file.text());
+  if(envelope.format!=="OFPMPLUS-VAULT"||envelope.version!==1||envelope.kdf!=="PBKDF2-SHA256"||envelope.cipher!=="AES-256-GCM"||envelope.iterations!==310000)throw new Error("This is not a supported encrypted workspace backup.");
+  const key=await vaultDeriveKey(pass,vaultBase64ToBytes(envelope.salt));
+  const clear=await crypto.subtle.decrypt({name:"AES-GCM",iv:vaultBase64ToBytes(envelope.iv)},key,vaultBase64ToBytes(envelope.data));
+  const payload=JSON.parse(new TextDecoder().decode(clear));
+  if(payload.format!=="OFPMPLUS-ENCRYPTED-BACKUP"||payload.version!==1||!payload.records||typeof payload.records!=="object"||!Array.isArray(payload.records[KEY]))throw new Error("The decrypted backup does not contain valid deal records.");
+  const entries=Object.entries(payload.records);
+  if(entries.some(([k])=>k!==KEY&&!k.startsWith(VAULT_ALLOWED_PREFIX)))throw new Error("Backup contains an unrecognized storage record. Nothing was restored.");
+  for(const [k,v] of entries)if(k!==KEY&&typeof v==="undefined")throw new Error("Backup contains an invalid record.");
+  if(!confirm("Restore "+payload.records[KEY].length+" deal(s) and "+(entries.length-1)+" additional workspace record set(s)? This replaces matching app records in this browser. Export the current workspace first if you need to keep it."))return;
+  for(const [k,v] of entries)localStorage.setItem(k,JSON.stringify(v));
+  vaultStatus("Backup restored. Reloading the workspace…");location.reload();
+ }catch(e){vaultStatus("Restore failed. The passphrase may be incorrect, or the backup may be damaged. "+(e.name==="OperationError"?"":(e.message||"")),true)}
+ finally{ev.target.value=""}
+};
+
 document.getElementById("exportData").onclick=()=>{const blob=new Blob([JSON.stringify({exported:new Date().toISOString(),deals},null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="owner-finance-ai-deals.json";a.click();URL.revokeObjectURL(url)};
 document.getElementById("clearData").onclick=()=>{if(!confirm("Permanently delete all deal data saved in this browser? Export a backup first if needed."))return;deals=[];persist();document.getElementById("analysisResult").classList.add("hidden");document.getElementById("offerOutput").classList.add("hidden")};
 
