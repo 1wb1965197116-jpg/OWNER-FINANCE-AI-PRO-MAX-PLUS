@@ -466,3 +466,48 @@ const cloudCreateButton=document.getElementById("cloudCreateOwner");if(cloudCrea
 const cloudUploadButton=document.getElementById("cloudUpload");if(cloudUploadButton)cloudUploadButton.onclick=async()=>{const records=cloudLocalRecords();if(!records.length){cloudSetStatus("No local app records found.",true);return}if(!confirm("Upload "+records.length+" local app records to your encrypted cloud workspace? Matching cloud copies will be replaced. Your local data will remain unchanged."))return;try{let saved=0;for(let i=0;i<records.length;i+=20){const d=await cloudApi("/api/workspace/sync",{method:"POST",body:JSON.stringify({records:records.slice(i,i+20)})});saved+=d.saved;cloudSetStatus("Uploaded "+saved+" of "+records.length+" records…")}cloudSetStatus("Upload complete: "+saved+" records stored encrypted at rest. Local records were kept.")}catch(e){cloudSetStatus("Upload stopped: "+e.message,true)}};
 const cloudRestoreButton=document.getElementById("cloudRestore");if(cloudRestoreButton)cloudRestoreButton.onclick=async()=>{if(!confirm("Restore cloud records onto this device? Matching local app records will be overwritten. Create an encrypted backup first. Continue?"))return;try{const d=await cloudApi("/api/workspace/sync");if(!d.records.length){cloudSetStatus("No cloud records were found.");return}if(!confirm("The cloud contains "+d.records.length+" records. Replace matching records on this device and reload the app?"))return;for(const r of d.records){if(!(r.key==="ofpmplus_workspace_v1"||r.key.startsWith("ofpmplus_")))throw new Error("Cloud returned an unexpected record key.");localStorage.setItem(r.key,JSON.stringify(r.value))}cloudSetStatus("Restored "+d.records.length+" records. Reloading…");window.location.reload()}catch(e){cloudSetStatus("Restore stopped: "+e.message,true)}};
 cloudRefresh();
+
+
+/* Firecrawl-powered internet research and public-page scraping. API key stays on the server. */
+let webResearchItems=[];
+let webResearchSpeech="";
+const webResearchForm=document.getElementById("webResearchForm");
+if(webResearchForm)webResearchForm.addEventListener("submit",async e=>{
+ e.preventDefault();
+ const btn=document.getElementById("webResearchSearch"),status=document.getElementById("webResearchStatus"),box=document.getElementById("webResearchResults"),analyze=document.getElementById("webResearchAnalyze");
+ const query=document.getElementById("webResearchQuery").value.trim(),location=document.getElementById("webResearchLocation").value.trim(),limit=Number(document.getElementById("webResearchLimit").value)||5;
+ if(!query)return;
+ btn.disabled=true;btn.textContent="Searching and extracting…";status.textContent="Searching public web sources and extracting readable page content…";box.classList.remove("empty");box.textContent="Research in progress…";analyze.disabled=true;document.getElementById("webResearchAI").classList.add("hidden");
+ try{
+  const r=await fetch("/api/research/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,location,limit})}),data=await r.json();
+  if(!r.ok)throw new Error(data.error||"Internet research failed.");
+  webResearchItems=data.results||[];
+  if(!webResearchItems.length){box.innerHTML='<div class="empty">No extractable public webpages were returned. Try a broader search phrase.</div>';status.textContent="Search completed · 0 results";return}
+  box.innerHTML='<div class="search-intro"><b>'+webResearchItems.length+' web pages found and processed by '+esc(data.source)+'</b><p>Retrieved '+esc(new Date(data.retrievedAt).toLocaleString())+'. Open the source to verify details.</p></div><div class="web-research-grid">'+webResearchItems.map((x,i)=>'<article class="web-research-card"><div><b>'+esc(x.title)+'</b><p>'+esc(x.description||"No search description supplied.")+'</p><small>'+esc((x.markdown||"").length.toLocaleString())+' characters extracted</small></div><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open original source ↗</a><button class="secondary small web-result-add" type="button" data-web-index="'+i+'">Use in AI deal research</button></article>').join("")+'</div>';
+  status.textContent="Search complete. Results are leads, not verified property records.";analyze.disabled=false;
+  webResearchSpeech="Internet research returned "+webResearchItems.length+" pages for "+query+(location?" in "+location:"")+". Review each original source and verify all property and seller details.";
+ }catch(err){status.textContent="";box.innerHTML='<div class="notice">'+esc(err.message)+'</div>'}
+ finally{btn.disabled=false;btn.textContent="Search internet & extract pages"}
+});
+const webResearchAnalyze=document.getElementById("webResearchAnalyze");
+if(webResearchAnalyze)webResearchAnalyze.onclick=async()=>{
+ const out=document.getElementById("webResearchAI");if(!webResearchItems.length)return;
+ out.classList.remove("hidden");out.textContent="AI is reviewing extracted webpages…";webResearchAnalyze.disabled=true;
+ const sourceText=webResearchItems.map((x,i)=>"SOURCE "+(i+1)+"\nTitle: "+x.title+"\nURL: "+x.url+"\nDescription: "+x.description+"\nExtracted content:\n"+(x.markdown||"").slice(0,3500)).join("\n\n").slice(0,10500);
+ const prompt="Review the following live web research for a U.S. real-estate investor. Identify property addresses, asking prices, property type, seller-financing or owner-financing terms, motivated-seller signals, listing status, dates, contact methods explicitly published, and potential deal leads. Make a table-like concise summary per source. Clearly label facts stated on the page versus AI interpretation and unknowns. Cite each finding using its source number and URL. Do not invent prices, addresses, terms, ownership, title, liens, taxes, rents, comps, or contact details. Flag stale pages, duplicates, sponsored content, and unverifiable claims. Recommend next diligence steps only; do not contact anyone or draft/send an offer. User approval is required for all actions.\n\n"+sourceText;
+ try{const r=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})}),data=await r.json();if(!r.ok)throw new Error(data.error||"AI analysis failed.");out.textContent=data.answer||"No AI summary returned.";webResearchSpeech=out.textContent}
+ catch(e){out.textContent=e.message}
+ finally{webResearchAnalyze.disabled=false}
+};
+const webScrapeForm=document.getElementById("webScrapeForm");
+if(webScrapeForm)webScrapeForm.addEventListener("submit",async e=>{
+ e.preventDefault();const btn=document.getElementById("webScrapeButton"),out=document.getElementById("webScrapeOutput"),url=document.getElementById("webScrapeUrl").value.trim();
+ btn.disabled=true;btn.textContent="Scraping…";out.classList.remove("hidden");out.textContent="Extracting public webpage content…";
+ try{const r=await fetch("/api/research/scrape",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url})}),data=await r.json();if(!r.ok)throw new Error(data.error||"Page scraping failed.");out.textContent=data.title+"\n"+data.url+"\nRetrieved: "+new Date(data.retrievedAt).toLocaleString()+"\n\n"+(data.markdown||"No readable page text was returned.");webResearchItems=[{title:data.title,url:data.url,description:"Directly scraped webpage",markdown:data.markdown}];document.getElementById("webResearchAnalyze").disabled=!data.markdown;document.getElementById("webResearchStatus").textContent="Page scraped. You can analyze it with AI above."}
+ catch(err){out.textContent=err.message}
+ finally{btn.disabled=false;btn.textContent="Scrape webpage"}
+});
+const webResearchSpeak=document.getElementById("webResearchSpeak");
+if(webResearchSpeak)webResearchSpeak.onclick=()=>{const t=document.getElementById("webResearchAI").textContent||webResearchSpeech||"Run an internet search first.";speakText(t)};
+const webResearchClear=document.getElementById("webResearchClear");
+if(webResearchClear)webResearchClear.onclick=()=>{webResearchItems=[];webResearchSpeech="";document.getElementById("webResearchResults").className="empty";document.getElementById("webResearchResults").textContent="Search results and extracted page content will appear here.";document.getElementById("webResearchAI").classList.add("hidden");document.getElementById("webResearchStatus").textContent="";document.getElementById("webResearchAnalyze").disabled=true};
