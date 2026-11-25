@@ -108,6 +108,5 @@ document.getElementById("diligenceDeal").addEventListener("change",renderDiligen
 document.getElementById("diligenceNotes").addEventListener("input",e=>{const d=selectedDiligenceDeal();if(!d)return;d.diligence=d.diligence||{checks:{},notes:""};d.diligence.notes=e.target.value;localStorage.setItem(KEY,JSON.stringify(deals))});
 document.getElementById("speakDiligence").onclick=()=>{const d=selectedDiligenceDeal();if(!d)return;const total=DILIGENCE_GROUPS.reduce((n,g)=>n+g[1].length,0),done=Object.values((d.diligence||{checks:{}}).checks||{}).filter(Boolean).length;const remaining=[];DILIGENCE_GROUPS.forEach((g,gi)=>g[1].forEach((label,i)=>{if(!(d.diligence?.checks?.[gi+"-"+i]))remaining.push(label)}));speakText("Due diligence status for "+d.address+". "+done+" of "+total+" checklist items completed. "+remaining.length+" remain. Outstanding items include: "+remaining.slice(0,8).join("; ")+(remaining.length>8?"; and more":"")+". Checklist entries are user-tracked and have not been independently verified.");};
 document.getElementById("resetDiligence").onclick=()=>{const d=selectedDiligenceDeal();if(!d||!confirm("Reset all due-diligence checkmarks and notes for this property?"))return;d.diligence={checks:{},notes:""};persist();renderDiligence()};
-\n\nrenderAll();checkHealth();\nrenderDiligenceDealOptions();
-
-\n
+renderAll();checkHealth();
+renderDiligenceDealOptions();
