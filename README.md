@@ -57,3 +57,14 @@ Creative-finance transactions are state- and fact-specific. Subject-to and selle
 7. Multi-user team dashboard, notifications, backups and monitoring.
 
 Every external action involving offers, contracts or money must remain behind an explicit user approval step.
+
+## Account API foundation (not activated)
+The server now includes a first-owner bootstrap, login, logout and session-inspection API. It is intentionally unavailable until `DATABASE_URL` is configured and migration 001 is applied. The first owner is created only with a one-time bootstrap secret; public registration is disabled. Passwords use Node scrypt, session cookies are HttpOnly/Secure in production/SameSite=Strict, and only session-token hashes are stored.
+
+Do not set the database connection or bootstrap secret until the database has been approved and provisioned. When that stage is authorized:
+- Set `DATABASE_URL` to the Render internal connection string.
+- Set `OWNER_BOOTSTRAP_TOKEN` to a random secret of at least 32 characters, use it once to create the owner, then remove the variable immediately.
+- Apply `database/migrations/001_secure_workspace.sql` before attempting login.
+- Use a dedicated application database role without table ownership or BYPASSRLS privileges.
+
+The account API is a security foundation only. Workspace cloud sync, account recovery, multi-factor authentication, and production end-to-end security testing are not yet implemented. Existing browser-local data remains separate and unchanged.
