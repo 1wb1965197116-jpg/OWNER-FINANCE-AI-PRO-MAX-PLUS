@@ -81,4 +81,5 @@ async function searchLiveProperties(){
  finally{btn.disabled=false;btn.textContent="Search live property listings"}
 }
 document.getElementById("livePropertySearch").addEventListener("click",searchLiveProperties);
-\nrenderAll();checkHealth();
+
+renderAll();checkHealth();
