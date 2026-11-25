@@ -35,11 +35,11 @@ async function provisionDatabase(req,res){
  try{
   const check=await admin.query("SELECT current_database() AS db");
   const rolePassword=crypto.randomBytes(36).toString("base64url");
-  await admin.query("DO $ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='ofpm_app') THEN CREATE ROLE ofpm_app; END IF; END $");
+  await admin.query("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='ofpm_app') THEN CREATE ROLE ofpm_app; END IF; END $$");
   await admin.query("ALTER ROLE ofpm_app WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS PASSWORD '"+rolePassword+"'");
   const migration=fs.readFileSync(path.join(ROOT,"database/migrations/001_secure_workspace.sql"),"utf8");
   await admin.query(migration);
-  await admin.query("CREATE OR REPLACE FUNCTION public.prevent_audit_event_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $ BEGIN RAISE EXCEPTION 'audit_events is append-only'; END $");
+  await admin.query("CREATE OR REPLACE FUNCTION public.prevent_audit_event_mutation() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$ BEGIN RAISE EXCEPTION 'audit_events is append-only'; END $$");
   await admin.query("DROP TRIGGER IF EXISTS audit_events_append_only ON public.audit_events");
   await admin.query("CREATE TRIGGER audit_events_append_only BEFORE UPDATE OR DELETE ON public.audit_events FOR EACH ROW EXECUTE FUNCTION public.prevent_audit_event_mutation()");
   const dbName='"'+String(check.rows[0].db).replace(/"/g,'""')+'"';
