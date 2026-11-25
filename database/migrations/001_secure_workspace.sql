@@ -124,3 +124,13 @@ CREATE POLICY audit_events_self ON audit_events
   WITH CHECK (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid);
 
 COMMIT;
+
+-- Append-only audit protection.
+CREATE OR REPLACE FUNCTION public.prevent_audit_event_mutation()
+RETURNS trigger LANGUAGE plpgsql
+SET search_path=pg_catalog,public
+AS $$ BEGIN RAISE EXCEPTION 'audit_events is append-only'; END $$;
+DROP TRIGGER IF EXISTS audit_events_append_only ON public.audit_events;
+CREATE TRIGGER audit_events_append_only
+BEFORE UPDATE OR DELETE ON public.audit_events
+FOR EACH ROW EXECUTE FUNCTION public.prevent_audit_event_mutation();
