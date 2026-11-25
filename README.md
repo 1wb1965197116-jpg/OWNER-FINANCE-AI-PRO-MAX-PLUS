@@ -36,7 +36,7 @@ No third-party package installation is required.
 
 For Render: create a **Web Service** from this GitHub repository, choose the Node runtime, use build command `npm install` (or leave blank; there are no dependencies), start command `npm start`, then add `OPENAI_API_KEY` and optionally `OPENAI_MODEL` under Environment. Do not commit a real key.
 
-## Data and privacy
+## Connect live property listings (RentCast)\n\n1. Create a RentCast API account and obtain an API key from its API dashboard. The provider currently documents 50 free developer requests per month; paid plans and overage fees may apply.\n2. In Render, open the service Environment settings and add `RENTCAST_API_KEY` with your key. Do not put the key in GitHub, the browser, or this chat.\n3. Save the environment change and allow Render to redeploy.\n4. In Acquisition Search, enter a ZIP code, a two-letter state abbreviation (such as NJ), or `City, ST`, set an optional price range, and tap **Search live property listings**.\n\nThe app requests up to 20 active sale listings per search. RentCast documents nationwide residential listing coverage, but listing coverage is not a guarantee that every property is present or current. This integration does not verify seller financing, title, liens, condition, ownership authority, taxes or rent.\n\n## Data and privacy
 
 Deal records are currently stored in browser localStorage on the device/browser where they are entered. They do not automatically sync between devices, and clearing browser data can erase them. Export regular backups. This is not a secure financial vault or multi-user database. Do not enter bank credentials, Social Security numbers, full account numbers, or highly sensitive personal data.
 
