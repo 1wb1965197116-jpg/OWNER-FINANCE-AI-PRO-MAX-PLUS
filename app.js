@@ -278,11 +278,57 @@ function compareContractVersions(){
 }
 document.getElementById("compareContractVersions").onclick=compareContractVersions;
 document.getElementById("readContractVersionResults").onclick=()=>{const box=document.getElementById("contractVersionResults");if(!box.classList.contains("hidden"))speakText(box.innerText||box.textContent)};
+
+const DEADLINEKEY="ofpmplus_closing_deadlines_v1";
+let closingDeadlines=(()=>{try{return JSON.parse(localStorage.getItem(DEADLINEKEY)||"[]")}catch{return[]}})();
+function saveClosingDeadlines(){localStorage.setItem(DEADLINEKEY,JSON.stringify(closingDeadlines));renderClosingDeadlines()}
+function renderDeadlineContractOptions(){
+ const s=document.getElementById("deadlineContract");if(!s)return;
+ const old=s.value;
+ s.innerHTML='<option value="">Optional — link to a saved contract record</option>'+contractQueue.map(x=>'<option value="'+esc(x.id)+'">'+esc((x.type||x.kind)+" · "+(x.property||"Unlinked")+" · "+dateLabel(x.created))+'</option>').join("");
+ if(closingDeadlines.some(x=>x.contractId===old)||contractQueue.some(x=>x.id===old))s.value=old;
+}
+function deadlineState(item){
+ if(item.done)return "Completed";
+ if(!item.date)return "Date missing";
+ const due=new Date(item.date+"T23:59:59");
+ const today=new Date();today.setHours(0,0,0,0);
+ const days=Math.ceil((new Date(item.date+"T00:00:00")-today)/86400000);
+ if(days<0)return "Overdue";
+ if(days===0)return "Due today";
+ if(days<=7)return "Due in "+days+" day(s)";
+ if(days<=30)return "Due within 30 days";
+ return "Upcoming";
+}
+function renderClosingDeadlines(){
+ renderDeadlineContractOptions();
+ const list=document.getElementById("deadlineList"),summary=document.getElementById("deadlineSummary");
+ if(!list||!summary)return;
+ const sorted=[...closingDeadlines].sort((a,b)=>(a.done?1:0)-(b.done?1:0)||String(a.date||"9999").localeCompare(String(b.date||"9999")));
+ const active=closingDeadlines.filter(x=>!x.done),overdue=active.filter(x=>deadlineState(x)==="Overdue").length,soon=active.filter(x=>["Due today"].includes(deadlineState(x))||deadlineState(x).startsWith("Due in ")||deadlineState(x)==="Due within 30 days").length;
+ summary.textContent=active.length+" open milestone(s) · "+overdue+" overdue · "+soon+" due within 30 days · "+closingDeadlines.filter(x=>x.done).length+" completed";
+ list.innerHTML=sorted.length?sorted.map(x=>{
+ const linked=contractQueue.find(c=>c.id===x.contractId);
+ const state=deadlineState(x),cls=state==="Overdue"||state==="Due today"?"deadline-alert":state==="Completed"?"deadline-done":"";
+ return '<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.date||"No date")+' · '+esc(x.priority||"Normal")+' priority · '+esc(x.owner||"No owner assigned")+'</small><span class="crm-flag '+cls+'">'+esc(state)+'</span><small>'+esc(linked?(linked.type+" — "+linked.property):"No linked document")+'</small>'+(x.notes?'<p>'+esc(x.notes)+'</p>':"")+'</div><div class="actions">'+(!x.done?'<button class="textbtn" data-deadline-done="'+esc(x.id)+'">Mark complete</button>':'<button class="textbtn" data-deadline-reopen="'+esc(x.id)+'">Reopen</button>')+'<button class="textbtn" data-deadline-delete="'+esc(x.id)+'">Delete</button></div></div>'
+ }).join(""):'<div class="empty">No closing milestones yet. Add your first deadline above.</div>';
+ list.querySelectorAll("[data-deadline-done]").forEach(b=>b.onclick=()=>{const x=closingDeadlines.find(v=>v.id===b.dataset.deadlineDone);if(x){x.done=true;x.completedAt=new Date().toISOString();saveClosingDeadlines()}});
+ list.querySelectorAll("[data-deadline-reopen]").forEach(b=>b.onclick=()=>{const x=closingDeadlines.find(v=>v.id===b.dataset.deadlineReopen);if(x){x.done=false;delete x.completedAt;saveClosingDeadlines()}});
+ list.querySelectorAll("[data-deadline-delete]").forEach(b=>b.onclick=()=>{if(confirm("Delete this deadline from this browser?")){closingDeadlines=closingDeadlines.filter(v=>v.id!==b.dataset.deadlineDelete);saveClosingDeadlines()}});
+}
+document.getElementById("addDeadline").onclick=()=>{
+ const title=document.getElementById("deadlineTitle").value.trim(),date=document.getElementById("deadlineDate").value;
+ if(!title||!date){alert("Enter a milestone name and due date.");return}
+ closingDeadlines.push({id:String(Date.now()),title,date,priority:document.getElementById("deadlinePriority").value,owner:document.getElementById("deadlineOwner").value.trim(),notes:document.getElementById("deadlineNotes").value.trim(),contractId:document.getElementById("deadlineContract").value,done:false,created:new Date().toISOString()});
+ saveClosingDeadlines();document.getElementById("deadlineTitle").value="";document.getElementById("deadlineDate").value="";document.getElementById("deadlineOwner").value="";document.getElementById("deadlineNotes").value="";
+};
+document.getElementById("readDeadlines").onclick=()=>{const open=closingDeadlines.filter(x=>!x.done).sort((a,b)=>String(a.date).localeCompare(String(b.date)));speakText(open.length?open.map(x=>x.title+", "+deadlineState(x)+", due "+x.date).join(". "):"There are no open closing deadlines.")};
 function renderContractQueue(){renderContractVersionOptions();const box=document.getElementById("contractQueue");if(!box)return;box.innerHTML=contractQueue.length?contractQueue.map(x=>'<div class="crm-card"><div><b>'+esc(x.kind)+': '+esc(x.type)+'</b><small>'+esc(x.property)+' · '+esc(x.other||"No counterparty")+'</small><small>'+esc(dateLabel(x.created))+'</small><span class="crm-flag">'+esc(x.status)+'</span></div><div class="actions"><button class="textbtn" data-cview="'+esc(x.id)+'">View</button>'+(x.kind==="Outgoing draft"&&x.status==="Draft - not approved"?'<button class="textbtn" data-capprove="'+esc(x.id)+'">Approve this draft for sending</button>':"")+'<button class="textbtn" data-cdelete="'+esc(x.id)+'">Delete</button></div></div>').join(""):'<div class="empty">No contract records yet.</div>';box.querySelectorAll("[data-cview]").forEach(b=>b.onclick=()=>{const x=contractQueue.find(y=>y.id===b.dataset.cview);if(!x)return;currentQueueDocumentId=x.id;lastContractDraft=x.content||"";const out=document.getElementById("contractDraftOutput");out.textContent=lastContractDraft;out.classList.remove("hidden");const review=document.getElementById("incomingReviewOutput");if(x.review){review.classList.remove("hidden");review.textContent="AI review (separate from original document):\\n"+x.review}else{review.classList.add("hidden");review.textContent=""}out.scrollIntoView({behavior:"smooth",block:"center"})});box.querySelectorAll("[data-capprove]").forEach(b=>b.onclick=()=>{const x=contractQueue.find(y=>y.id===b.dataset.capprove);if(!x||!confirm("Have you reviewed this exact draft and do you authorize it to be marked approved for future sending? The app cannot transmit it yet. This is not a signature or acceptance."))return;x.status="Approved by owner - awaiting e-sign connection";x.approvedAt=new Date().toISOString();saveContractQueue()});box.querySelectorAll("[data-cdelete]").forEach(b=>b.onclick=()=>{if(confirm("Delete this local record?")){contractQueue=contractQueue.filter(x=>x.id!==b.dataset.cdelete);saveContractQueue()}})}
 document.getElementById("readContractQueue").onclick=()=>speakText(contractQueue.length+" contract records. "+contractQueue.filter(x=>x.status.includes("review")).length+" received documents need review. "+contractQueue.filter(x=>x.status.includes("Approved")).length+" drafts approved by you and awaiting the e-signature connection.");
 document.getElementById("contractDeal").addEventListener("change",()=>{const d=deals.find(x=>x.id===document.getElementById("contractDeal").value);if(d)document.getElementById("contractPrice").value=d.asking||""});
 
 renderAll();checkHealth();renderContractDealOptions();renderContractQueue();
+renderClosingDeadlines();
 renderDiligenceDealOptions();renderFinanceDealOptions();
 renderDiligenceDealOptions();
 
