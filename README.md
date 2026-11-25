@@ -68,3 +68,8 @@ Do not set the database connection or bootstrap secret until the database has be
 - Use a dedicated application database role without table ownership or BYPASSRLS privileges.
 
 The account API is a security foundation only. Workspace cloud sync, account recovery, multi-factor authentication, and production end-to-end security testing are not yet implemented. Existing browser-local data remains separate and unchanged.
+
+## Encrypted cloud workspace sync
+Authenticated sync endpoints are available at `/api/workspace/sync` (GET restore, POST upload) and `/api/workspace/record/:key` (DELETE). They require a valid owner session, the database migration, and `WORKSPACE_ENCRYPTION_KEY` containing a base64-encoded 32-byte random key. The server encrypts each workspace value with AES-256-GCM before writing PostgreSQL; nonce, authentication tag and ciphertext are stored separately. RLS scopes all record operations to the authenticated user. Browser upload and restore are explicit user actions; no background sync runs. Restore overwrites matching local app keys only after two confirmation prompts. Create an encrypted browser backup before restoring.
+
+Never commit the encryption key. Store it only as a private Render environment variable and keep a protected offline copy for disaster recovery. Losing or changing it without a planned key rotation makes encrypted cloud records unreadable. Key rotation is not yet implemented. This sync path has not been tested against a provisioned database because no database has been created or paid for.
