@@ -125,6 +125,34 @@
 <label>Proposed closing date<input id="contractClose" type="date"></label><label>Inspection period (days)<input id="contractInspection" type="number" min="0"></label>
 <label class="span2">Contingencies and requested terms<textarea id="contractTerms" rows="4" placeholder="Financing, inspection, appraisal, title, survey, insurance, taxes, possession, repairs, closing costs and other terms. Leave unknowns blank."></textarea></label>
 <div class="span2 actions"><button class="primary" id="generateContract">AI prepare draft</button><button class="secondary" id="readContractDraft">Read draft aloud</button><button class="secondary" id="saveContractDraft">Save draft</button></div></div>
+<div class="signature-tools">
+<h4>Signature on file</h4>
+<p class="muted">Save your typed name and apply it only after reviewing the exact document. This is a typed signature mark, not identity-verified e-signature or a substitute for a provider signing ceremony.</p>
+<div class="formgrid">
+<label>Signer’s full legal name<input id="signatureName" autocomplete="name" placeholder="Enter your exact legal name"></label>
+<label class="signature-consent"><input id="signatureConsent" type="checkbox"> I authorize use of this saved typed signature mark on documents I personally review and select.</label>
+</div>
+<div class="actions"><button class="secondary" type="button" id="saveSignature">Save signature on this device</button><button class="secondary" type="button" id="applySignature">Apply signature to current draft</button></div>
+<div class="signature-status muted" id="signatureStatus">No signature saved.</div>
+</div>
+<div class="document-actions actions">
+<button class="primary" type="button" id="documentPdf">Send to PDF / Save as PDF</button>
+<button class="secondary" type="button" id="documentPrint">Print document</button>
+<button class="secondary" type="button" id="documentFax">Prepare fax</button>
+</div>
+<div id="faxPanel" class="fax-panel hidden">
+<h4>Fax cover sheet</h4>
+<div class="formgrid">
+<label>Recipient / company<input id="faxRecipient" placeholder="Recipient name or company"></label>
+<label>Fax number<input id="faxNumber" type="tel" placeholder="Fax number"></label>
+<label>Attention<input id="faxAttention" placeholder="Optional attention line"></label>
+<label>Number of pages<input id="faxPages" type="number" min="1" value="1"></label>
+<label class="span2">Cover note<textarea id="faxNote" rows="2" placeholder="Confidential real-estate document for review."></textarea></label>
+</div>
+<p class="muted">This creates a fax-ready cover sheet and document printout. Direct fax transmission is not connected; no fax will be sent by this button.</p>
+<div class="actions"><button class="primary" type="button" id="printFax">Print / Save fax packet as PDF</button></div>
+<div id="faxCoverPreview" class="fax-cover hidden"></div>
+</div>
 <div id="contractDraftOutput" class="draft hidden" aria-live="polite"></div></article>
 <article class="panel"><h3>Incoming contract review</h3><p>Paste the text of a received contract or counteroffer for an AI summary and issue checklist.</p><label>Received document text<textarea id="incomingContractText" rows="8" placeholder="Paste contract text here. Remove Social Security numbers, bank details and other sensitive identifiers first."></textarea></label><div class="actions"><button class="primary" id="reviewIncomingContract">AI review incoming document</button><button class="secondary" id="saveIncomingContract">Save received document record</button></div><div id="incomingReviewOutput" class="aianswer hidden"></div></article>
 <article class="panel"><div class="panelhead"><div><h3>Contract approval & exchange queue</h3><p>Review drafts, counteroffers and incoming contract records.</p></div><button class="secondary small" id="readContractQueue">Read queue aloud</button></div><div id="contractQueue" class="crm-list"></div><div class="notice">Live email and e-signature sending/receiving are not connected to this app yet. This workspace stores drafts and review notes locally. An e-signature provider and secure API/OAuth integration are required before live delivery. Your approval to send is not your signature or acceptance.</div></article>
