@@ -60,4 +60,5 @@ function buildAcquisitionSearch(){
 }
 document.getElementById("acquisitionForm").addEventListener("submit",e=>{e.preventDefault();buildAcquisitionSearch()});
 document.getElementById("speakSearch").onclick=()=>speakText(window.lastAcqSpeech||buildAcquisitionSearch());
-\nrenderAll();checkHealth();
+
+renderAll();checkHealth();
