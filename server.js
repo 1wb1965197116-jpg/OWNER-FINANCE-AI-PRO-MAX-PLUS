@@ -144,9 +144,47 @@ async function handleAuth(req,res,url){
   return json(res,404,{error:"Unknown account endpoint."});
  }catch(e){if(e.status)return json(res,e.status,{error:e.message});console.error("Account operation failed:",e.message);return json(res,503,{error:"Account service could not complete the request. Check migration and database configuration."})}
 }
+
+async function handleISpeedWebhook(req,res){
+ if(req.method!=="POST")return json(res,405,{error:"Method not allowed."});
+ const secret=String(process.env.ISPEEDTOLEAD_WEBHOOK_SECRET||"");
+ if(secret.length<40)return json(res,503,{error:"Webhook receiver is not configured."});
+ const supplied=String(req.headers["x-ofpm-webhook-secret"]||"");
+ const a=Buffer.from(supplied),b=Buffer.from(secret);
+ if(a.length!==b.length||!crypto.timingSafeEqual(a,b))return json(res,401,{error:"Webhook authentication failed."});
+ if(!pool||!dbReady||!workspaceKey())return json(res,503,{error:"Secure cloud storage is not ready."});
+ let body;try{body=await readBody(req,1024*1024)}catch(e){return json(res,400,{error:e.message})}
+ const pick=(obj,keys)=>{for(const k of keys){for(const [name,value] of Object.entries(obj||{})){if(name.toLowerCase().replace(/[^a-z0-9]/g,"")===k.toLowerCase().replace(/[^a-z0-9]/g,"")&&value!=null&&String(value).trim())return String(value).trim()}}return""};
+ const flat={...(body||{}),...(body.data&&typeof body.data==="object"?body.data:{}),...(body.lead&&typeof body.lead==="object"?body.lead:{})};
+ const lead={name:pick(flat,["sellerName","name","contactName","fullName"])||"Seller name not provided",phone:pick(flat,["phone","phoneNumber","mobile"]),email:pick(flat,["email","emailAddress"]),address:pick(flat,["propertyAddress","address","streetAddress"]),price:pick(flat,["askingPrice","price","listPrice"]),estimatedValue:pick(flat,["estimatedValue","arv","marketValue"]),situation:pick(flat,["motivation","reason","sellerSituation"]),timeline:pick(flat,["timeline","sellTimeframe"]),finance:pick(flat,["sellerFinancing","financing","terms"])||"Not discussed",permission:pick(flat,["contactPermission","consent"]),notes:pick(flat,["notes","description","comments"]),source:"iSpeedToLead via Zapier",contact:"Phone",follow:"",history:[],created:new Date().toISOString()};
+ if(!lead.address&&!lead.phone&&!lead.email)return json(res,400,{error:"Payload needs a property address, phone number, or email address.",receivedFields:Object.keys(flat).slice(0,40)});
+ const identity=(lead.address||lead.phone||lead.email).toLowerCase().replace(/[^a-z0-9]/g,"");
+ const clientId="ofpmplus_seller_crm_v1";
+ try{
+  const result=await tx(async c=>{
+   await c.query("SELECT set_config('app.auth_mode','on',true)");
+   const u=await c.query("SELECT id FROM app_users WHERE account_status='active' ORDER BY created_at ASC LIMIT 1");
+   if(!u.rowCount)throw new Error("Owner account not found.");
+   await setUser(c,u.rows[0].id);
+   const q=await c.query("SELECT nonce,auth_tag,ciphertext FROM workspace_records WHERE record_type='user_setting' AND client_record_id=$1 LIMIT 1",[clientId]);
+   let leads=[];
+   if(q.rowCount){const row=q.rows[0];leads=decryptWorkspace({nonce:row.nonce,auth_tag:row.auth_tag,ciphertext:row.ciphertext})||[]}
+   const duplicate=leads.some(x=>{const vals=[x.address,x.phone,x.email].filter(Boolean).map(v=>String(v).toLowerCase().replace(/[^a-z0-9]/g,""));return vals.includes(identity)});
+   if(duplicate)return {added:false,total:leads.length};
+   lead.id=crypto.randomUUID();leads.unshift(lead);
+   const enc=encryptWorkspace(leads);
+   await c.query("INSERT INTO workspace_records(user_id,record_type,client_record_id,schema_version,encryption_key_version,nonce,auth_tag,ciphertext,safe_metadata) VALUES($1,'user_setting',$2,1,1,$3,$4,$5,'{}'::jsonb) ON CONFLICT(user_id,record_type,client_record_id) DO UPDATE SET nonce=EXCLUDED.nonce,auth_tag=EXCLUDED.auth_tag,ciphertext=EXCLUDED.ciphertext,updated_at=now()",[u.rows[0].id,clientId,enc.nonce,enc.authTag,enc.ciphertext]);
+   await c.query("INSERT INTO audit_events(user_id,event_type,record_type,record_id) VALUES($1,'record_updated','user_setting',$2)",[u.rows[0].id,"ispeedtolead_webhook"]);
+   return {added:true,total:leads.length};
+  });
+  return json(res,200,{ok:true,imported:result.added,duplicate:!result.added,totalSellerLeads:result.total,message:result.added?"Lead securely received. Sign in and restore cloud workspace to load it on your device.":"Duplicate lead ignored."});
+ }catch(e){console.error("iSpeedToLead webhook failed:",String(e.message||"unknown").slice(0,200));return json(res,503,{error:"Lead could not be securely stored. Check database and encryption configuration."})}
+}
+
 const server=http.createServer(async(req,res)=>{
  const url=(req.url||"/").split("?")[0];
  if(url==="/api/admin/provision-database")return provisionDatabase(req,res);
+ if(url==="/api/integrations/ispeedtolead")return handleISpeedWebhook(req,res);
  if(req.method==="GET"&&url==="/api/health")return json(res,200,{ok:true,app:"OWNER FINANCE AI PRO MAX PLUS",aiConfigured:Boolean(process.env.OPENAI_API_KEY),rentcastConfigured:Boolean(process.env.RENTCAST_API_KEY),databaseConfigured:Boolean(pool),databaseReady:dbReady,databaseProvisioningAvailable:Boolean(process.env.ADMIN_DATABASE_URL&&String(process.env.DB_SETUP_TOKEN||"").length>=32),cloudEncryptionConfigured:Boolean(workspaceKey())});
  if(url.startsWith("/api/auth/"))return handleAuth(req,res,url);
  if(url.startsWith("/api/workspace/"))return handleWorkspace(req,res,url);
