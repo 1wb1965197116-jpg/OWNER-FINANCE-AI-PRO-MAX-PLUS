@@ -109,7 +109,7 @@
  }
  function init(){
   if(!el("view-agents"))return;
-  hydrateSettings();el("saveAgentSettings").addEventListener("click",saveSettings);
+  hydrateSettings();write(SETTINGS_KEY,settings);el("saveAgentSettings").addEventListener("click",saveSettings);
   el("buyerProfileForm").addEventListener("submit",saveBuyer);
   el("buyerResearchForm").addEventListener("submit",researchBuyers);
   el("agentMatchDeal").addEventListener("change",renderMatches);
