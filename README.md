@@ -73,3 +73,36 @@ The account API is a security foundation only. Workspace cloud sync, account rec
 Authenticated sync endpoints are available at `/api/workspace/sync` (GET restore, POST upload) and `/api/workspace/record/:key` (DELETE). They require a valid owner session, the database migration, and `WORKSPACE_ENCRYPTION_KEY` containing a base64-encoded 32-byte random key. The server encrypts each workspace value with AES-256-GCM before writing PostgreSQL; nonce, authentication tag and ciphertext are stored separately. RLS scopes all record operations to the authenticated user. Browser upload and restore are explicit user actions; no background sync runs. Restore overwrites matching local app keys only after two confirmation prompts. Create an encrypted browser backup before restoring.
 
 Never commit the encryption key. Store it only as a private Render environment variable and keep a protected offline copy for disaster recovery. Losing or changing it without a planned key rotation makes encrypted cloud records unreadable. Key rotation is not yet implemented. This sync path has not been tested against a provisioned database because no database has been created or paid for.
+
+
+## Multi-agent acquisition and disposition workspace
+
+The Multi-Agent AI Team view adds five role-based analyses using the existing server-side AI endpoint:
+
+1. Acquisition Intelligence — prioritizes saved opportunities and seller follow-up gaps.
+2. Property Underwriting — reviews entered property numbers and missing diligence.
+3. Buyer Discovery — identifies gaps in market and buyer-category coverage.
+4. Buyer Matching — scores saved buyer profiles against saved properties using recorded criteria.
+5. Disposition Strategy — compares cautious cash/wholesale and owner-finance pathways and flags review needs.
+
+### Selected operating settings
+
+- Buyer markets: nationwide (all 50 states).
+- Buyer types: cash buyers, financed investors, landlords, builders and developers.
+- Deal types: wholesale/assignment opportunities and owner-financing opportunities.
+- Outreach: qualified buyers only, requiring active status, documented opt-in and owner review.
+
+### Buyer research and profiles
+
+- Public buyer discovery uses the existing `/api/research/search` endpoint and therefore requires `FIRECRAWL_API_KEY`.
+- AI role analyses use the existing `/api/ai/analyze` endpoint and therefore require `OPENAI_API_KEY`.
+- Five separate role prompts are sent through the configured `OPENAI_MODEL`. These are specialized agent roles, not five separately hosted model providers.
+- Public search results are unverified research leads. Users must verify company identity, contact details, buying activity, market criteria, proof of funds and lawful contact permission.
+- Buyer profiles, operating settings and outreach drafts are stored in browser local storage under the `ofpmplus_` prefix. They are included in the app's encrypted backup/export selection. Use Settings → Encrypted workspace backup or the authenticated cloud upload/restore controls to transfer them between devices.
+
+### Outreach and safety boundary
+
+- Matching scores are screening aids, not proof of funds, buyer qualification, a commitment to purchase, or a binding offer.
+- The app can prepare buyer outreach drafts, but this release does not send email, SMS, calls, offers or contracts. A messaging provider integration and explicit owner approval workflow are required before sending is enabled.
+- Buyers marked Do not contact, No permission or Opted out are blocked from draft preparation. A buyer marked Active with documented opt-in may receive a draft for owner review; no message is sent automatically.
+- Verify applicable state and federal privacy, marketing, real-estate licensing, wholesaling, assignment, disclosure and brokerage requirements before any transaction or outreach.
