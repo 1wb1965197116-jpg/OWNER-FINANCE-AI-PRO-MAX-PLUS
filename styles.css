@@ -46,3 +46,5 @@
 #motivatedLeadList .crm-card small{overflow-wrap:anywhere}
 #motivatedLeadList .crm-card>div:nth-child(2){text-align:right}
 @media(max-width:620px){#motivatedLeadList .crm-card{grid-template-columns:1fr}#motivatedLeadList .crm-card>div:nth-child(2){text-align:left}}
+
+#view-agents .stats{margin:14px 0}#view-agents .stat{min-width:0}#view-agents .stat strong{font-size:20px}#view-agents .crm-card a{font-size:11px;overflow-wrap:anywhere}#view-agents .crm-card small{white-space:normal;overflow-wrap:anywhere}#view-agents #agentTeamOutput .crm-card{grid-template-columns:1fr}#view-agents #agentTeamOutput .crm-card small{white-space:pre-wrap;line-height:1.6;color:var(--ink);font-size:12px}#view-agents #agentDraftOutput{white-space:pre-wrap;overflow-wrap:anywhere}#view-agents #agentDraftOutput:empty{display:none}#view-agents #agentMatchDeal{display:block;width:100%;margin:7px 0 12px;padding:11px;border:1px solid #dce3ed;border-radius:8px;background:#fff;color:var(--ink)}@media(max-width:620px){#view-agents .stats{grid-template-columns:1fr 1fr}}
