@@ -29,10 +29,10 @@
   if(!markets){unknown.push("buyer market not recorded")}else if(markets.includes("nationwide")||markets.includes("all states")||(st&&markets.includes(st.toLowerCase()))||addr.split(",").some(x=>markets.includes(x.trim()))){score+=30;why.push("market appears to fit")}else{why.push("market not matched")}
   const price=Number(d.asking)||0,min=Number(b.minBudget)||0,max=Number(b.maxBudget)||0;
   if(!price){unknown.push("property asking price missing")}else if((!min||price>=min)&&(!max||price<=max)){score+=25;why.push("asking price within buyer range")}else why.push("asking price outside recorded range");
-  const type=String(d.propertyType||"Single-family").toLowerCase(),types=String(b.propertyTypes||"").toLowerCase();
-  if(!types){unknown.push("property type not recorded")}else if(types.includes("all")||types.includes(type)||types.includes("single")&&/single|house/.test(type)){score+=15;why.push("property type fit")}else why.push("property type mismatch");
+  const type=String(d.propertyType||"").toLowerCase(),types=String(b.propertyTypes||"").toLowerCase();
+  if(!type)unknown.push("property type not recorded on deal");else if(!types){unknown.push("buyer property type not recorded")}else if(types.includes("all")||types.includes(type)||types.includes("single")&&/single|house/.test(type)){score+=15;why.push("property type fit")}else why.push("property type mismatch");
   const strat=String(d.strategy||"Cash purchase").toLowerCase(),strats=String(b.strategies||"").toLowerCase();
-  if(!strats){unknown.push("buyer strategy not recorded")}else if(strats.includes("all")||strats.includes("both")||strat.includes("seller")&&/owner|seller|creative/.test(strats)||strat.includes("cash")&&/cash|wholesale|flip|rental/.test(strats)){score+=15;why.push("strategy fit")}else why.push("strategy not matched");
+  if(!strats){unknown.push("buyer strategy not recorded")}else if(strats.includes("all")||strats.includes("both")||/seller|owner|creative/.test(strat)&&/owner|seller|creative/.test(strats)||/cash|wholesale|flip/.test(strat)&&/cash|wholesale|flip/.test(strats)||/rental|landlord/.test(strat)&&/rental|landlord/.test(strats)||/builder|developer|land/.test(strat)&&/builder|developer/.test(strats)){score+=15;why.push("strategy fit")}else why.push("strategy not matched");
   if(b.status==="Active"){score+=5;why.push("buyer marked active")}else if(b.status==="Needs verification"){score+=2;why.push("buyer needs verification")}else why.push("buyer not active");
   if(b.permission==="Yes — documented opt-in"){score+=5;why.push("contact permission documented")}else unknown.push("contact permission not verified");
   if(b.proofFunds==="Verified"){score+=5;why.push("proof of funds marked verified")}else unknown.push("proof of funds not verified");
@@ -58,7 +58,7 @@
  }
  function prepareOutreach(buyerId,d,score){
   const b=buyerProfiles.find(x=>x.id===buyerId);if(!b)return;
-  const eligible=b.permission==="Yes — documented opt-in"&&b.status==="Active";
+  const eligible=b.permission==="Yes — documented opt-in"&&b.status==="Active";if(b.status==="Do not contact"||b.permission==="No"||b.permission==="Opted out"){el("agentOutreachNotice").textContent="Outreach blocked: this buyer is marked do-not-contact or has no/withdrawn permission.";return;}
   const draft={id:crypto.randomUUID?crypto.randomUUID():String(Date.now()),buyerId,dealId:d.id,buyer:b.company||b.name,address:d.address,score,eligible,created:new Date().toISOString(),status:"Draft — owner review required",subject:"Property opportunity for review",body:"Hello "+(b.name||"there")+",\n\nI have a property opportunity that may fit your stated buying criteria.\nProperty: "+(d.address||"Address available on request")+"\nAsking price: "+(d.asking?money(d.asking):"Not provided")+"\nStrategy: "+(d.strategy||"Not specified")+"\n\nPlease let me know if you would like the verified property package and additional details. No offer or representation is made by this message.\n\nRegards"};
   outreachDrafts.unshift(draft);write(OUTREACH_KEY,outreachDrafts);renderOutreach();
   el("agentOutreachNotice").textContent=eligible?"Draft prepared. Buyer is marked opted-in and active, but the owner must review and approve before sending. No message was sent.":"Draft prepared only. This buyer is not currently eligible for outreach because documented opt-in and Active status are both required.";
