@@ -4,6 +4,7 @@ services:
     runtime: node
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: 22
@@ -11,3 +12,13 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-4.1-mini
+      - key: DATABASE_URL
+        sync: false
+      - key: WORKSPACE_ENCRYPTION_KEY
+        sync: false
+      - key: OWNER_BOOTSTRAP_TOKEN
+        sync: false
+      - key: FIRECRAWL_API_KEY
+        sync: false
+      - key: RENTCAST_API_KEY
+        sync: false
