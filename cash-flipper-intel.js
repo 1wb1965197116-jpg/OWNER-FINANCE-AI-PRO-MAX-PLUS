@@ -20,7 +20,7 @@
     <label class="span2">Research targets<select id="cfiTargets" multiple size="4"><option selected value="sales">Recent recorded cash sales and deed transfers</option><option selected value="flippers">Repeat buyers, flippers and resale activity</option><option selected value="pros">Local agents, brokers, title and closing professionals</option><option value="networks">REIA groups and investor networks</option></select><small class="muted">On iPhone, tap to select or deselect multiple targets.</small></label>
     <div class="span2 actions"><button class="primary" id="cfiRun" type="submit">Run cash buyer intelligence</button></div>
    </form><p class="notice">Sources vary by county. Public deed records can lag closing, may omit cash/financing details, and can include non-market transfers. Listing-site activity is not proof of a closed transaction. This release uses public web research; direct ATTOM, BatchData, county-record and MLS feeds require separate access or API credentials.</p></article>
-   <article class="panel"><div class="panelhead"><div><h3>Research results & AI assessment</h3><p>Each finding retains its source URL and retrieval date.</p></div></div><div id="cfiStatus" class="muted">Ready to research.</div><div id="cfiResults" class="crm-list empty">No research run yet.</div><div id="cfiAnalysis" class="aianswer hidden"></div></article>
+   <article class="panel"><div class="panelhead"><div><h3>Research results & AI assessment</h3><p>Each finding retains its source URL and retrieval date.</p></div></div><div id="cfiSearchStatus" class="muted">Search: Ready.</div><div id="cfiAiStatus" class="muted">AI review: Waiting for search results.</div><div id="cfiResults" class="crm-list empty">No research run yet.</div><div id="cfiAnalysis" class="aianswer hidden"></div></article>
    <article class="panel"><div class="panelhead"><div><h3>Buyer verification gate</h3><p>A buyer cannot be marked verified or matched as funding-ready until the evidence is recorded.</p></div><span class="tag">No automatic approval</span></div>
    <div class="formgrid">
     <label class="span2">Buyer / company<input id="cfiBuyerName" placeholder="Legal name or entity"></label>
@@ -39,35 +39,81 @@
   renderReviews();
  }
  async function run(e){
-  e.preventDefault();const market=$("cfiMarket").value.trim(),days=$("cfiWindow").value,type=$("cfiType").value;
-  const selected=[...$("cfiTargets").selectedOptions].map(x=>x.value);const out=$("cfiResults"),status=$("cfiStatus"),btn=$("cfiRun");
-  if(!selected.length){status.textContent="Select at least one research target.";return}
-  btn.disabled=true;btn.textContent="Researching…";out.className="crm-list";out.innerHTML="";$("cfiAnalysis").classList.add("hidden");
+  e.preventDefault();
+  const market=$("cfiMarket").value.trim(),days=$("cfiWindow").value,type=$("cfiType").value;
+  const selected=[...$("cfiTargets").selectedOptions].map(x=>x.value);
+  const out=$("cfiResults"),searchStatus=$("cfiSearchStatus"),aiStatus=$("cfiAiStatus"),btn=$("cfiRun");
+  if(!selected.length){searchStatus.textContent="Search: Select at least one research target.";return}
+  btn.disabled=true;btn.textContent="Researching…";out.className="crm-list";out.innerHTML="";
+  $("cfiAnalysis").classList.add("hidden");
+  aiStatus.textContent="AI review: Waiting for search results.";
   const targets={
-   sales:"recent recorded real estate deed transfers cash purchases buyer grantee county recorder last "+days+" days public records sale prices investor acquisitions",
-   flippers:"real estate investors house flippers repeat property buyers purchases resales recently sold listings renovated resale activity closed transactions last "+days+" days",
-   pros:"local real estate investor friendly agents brokers title companies settlement closing attorneys escrow officers serving property investors contact business networking",
-   networks:"local real estate investor association REIA meetups networking groups active house flippers cash buyers investor clubs"
+   sales: market.toLowerCase()==="united states"
+    ?"nationwide United States real estate investor purchases recorded deed transfers public property sales datasets multi-state transaction data"
+    :"recorded real estate deed transfers property sales county recorder "+market+" investor purchases public records",
+   flippers: market.toLowerCase()==="united states"
+    ?"United States nationwide real estate house flippers repeat property investors buy renovate resell documented transactions"
+    :"real estate investors house flippers repeat property buyers purchases resales closed transactions "+market,
+   pros:"real estate investor friendly agents brokers title companies settlement closing attorneys escrow officers "+market+" investor networking",
+   networks:"real estate investor association REIA meetups networking groups active house flippers cash buyers "+market
   };
   let all=[];
   try{
    for(const key of selected){
-    status.textContent="Searching "+key+" in "+market+"…";
-    const r=await fetch("/api/research/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:targets[key]+" "+type,location:market,limit:8})});
-    const data=await r.json();if(!r.ok)throw new Error(data.error||"Public research failed.");
+    searchStatus.textContent="Search: Searching "+key+" in "+market+"…";
+    const r=await fetch("/api/research/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query:targets[key]+" "+type+" source records transactions closing date",location:market,limit:8})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||"Public research request failed (HTTP "+r.status+").");
     for(const x of data.results||[])all.push({...x,researchType:key,retrievedAt:data.retrievedAt});
    }
-   const seen=new Set();all=all.filter(x=>{const k=x.url;if(seen.has(k))return false;seen.add(k);return true});
-   if(!all.length){out.className="empty";out.textContent="No results returned. Try a narrower city/county or another research target.";status.textContent="Research completed; no usable results.";return}
-   out.className="crm-list";out.innerHTML=all.map((x,i)=>'<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.researchType.toUpperCase())+' · '+esc(x.description||"Public source result")+'</small><small><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open source</a> · Retrieved '+esc(new Date(x.retrievedAt).toLocaleString())+'</small></div><div><span class="crm-flag">Unverified</span></div><div class="actions"><button class="textbtn" data-cfi-review="'+i+'">Add to verification review</button></div></div>').join("");
-   out.querySelectorAll("[data-cfi-review]").forEach(btn=>btn.addEventListener("click",()=>{const x=all[Number(btn.dataset.cfiReview)];$("cfiBuyerName").value=x.title;$("cfiEvidence").value="Research type: "+x.researchType+"\nSource: "+x.url+"\nRetrieved: "+x.retrievedAt+"\nFinding: "+(x.description||"")+"\n\nVerify legal buyer identity, recorded closing and current deal-specific funding."; $("cfiSaveStatus").textContent="Research lead loaded. Complete the independent checks before marking verified."; }));
-   status.textContent="Found "+all.length+" distinct public research sources. Sending evidence to the AI reviewer…";
-   const evidence=all.map(x=>({type:x.researchType,title:x.title,url:x.url,description:x.description,content:x.markdown?.slice(0,3500),retrievedAt:x.retrievedAt}));
-   const prompt="You are Cash Buyer & Flipper Intelligence AI, the sixth specialist in a real-estate investment platform. Review the supplied public research for market "+market+", property focus "+type+", lookback "+days+" days. Identify (A) evidence of completed recorded transactions, (B) likely repeat flippers based on documented buy/resale activity, (C) local real-estate professionals and investor networks useful for permission-based networking, and (D) data gaps. For every candidate classify evidence as: verified closing, public record lead only, listing/marketing signal, professional/network contact, or irrelevant. Do not call any buyer verified unless the source actually establishes a closed transaction and identity. A past cash purchase is not proof of current funds. State when county record coverage, deed type, arm's-length status, closing date or financing type is unknown. Never infer cash from absence of a mortgage alone. Return ranked next steps and a verification checklist. Never fabricate contacts or closings. Public source results JSON: "+JSON.stringify(evidence);
-   const ai=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});const ad=await ai.json();if(!ai.ok)throw new Error(ad.error||"AI assessment unavailable; raw research is still displayed.");
-   $("cfiAnalysis").textContent=ad.answer||"No AI assessment returned."; $("cfiAnalysis").classList.remove("hidden");status.textContent="Research and AI review completed. All candidates remain unverified until evidence is independently checked.";
-  }catch(err){status.textContent=err.message; if(!all.length){out.className="empty";out.textContent=err.message}}
-  finally{btn.disabled=false;btn.textContent="Run cash buyer intelligence"}
+  }catch(err){
+   searchStatus.textContent="Search failed: "+(err.message||"Unknown search error.");
+   aiStatus.textContent="AI review: Not run because search did not complete.";
+   if(!all.length){out.className="empty";out.textContent="No search results were returned. Check the search error above."}
+   btn.disabled=false;btn.textContent="Run cash buyer intelligence";return;
+  }
+  const seen=new Set();
+  all=all.filter(x=>{const k=x.url;if(!k||seen.has(k))return false;seen.add(k);return true});
+  if(!all.length){
+   out.className="empty";out.textContent="No results returned. Try a narrower city/county or another research target.";
+   searchStatus.textContent="Search completed; no usable results.";
+   aiStatus.textContent="AI review: Not run because there were no usable results.";
+   btn.disabled=false;btn.textContent="Run cash buyer intelligence";return;
+  }
+  out.className="crm-list";
+  out.innerHTML=all.map((x,i)=>{
+   const d=Date.parse(x.retrievedAt||"");
+   const retrieved=Number.isFinite(d)?new Date(d).toLocaleString():"date unavailable";
+   return '<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.researchType.toUpperCase())+' · '+esc(x.description||"Public source result")+'</small><small><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open source</a> · Retrieved '+esc(retrieved)+'</small></div><div><span class="crm-flag">Unverified</span></div><div class="actions"><button class="textbtn" data-cfi-review="'+i+'">Add to verification review</button></div></div>';
+  }).join("");
+  out.querySelectorAll("[data-cfi-review]").forEach(b=>b.addEventListener("click",()=>{
+   const x=all[Number(b.dataset.cfiReview)];
+   $("cfiBuyerName").value=x.title;
+   $("cfiEvidence").value="Research type: "+x.researchType+"\nSource: "+x.url+"\nRetrieved: "+(x.retrievedAt||"unknown")+"\nFinding: "+(x.description||"")+"\n\nVerify legal buyer identity, recorded closing and current deal-specific funding.";
+   $("cfiSaveStatus").textContent="Research lead loaded. Complete the independent checks before marking verified.";
+  }));
+  searchStatus.textContent="Search complete: "+all.length+" distinct public sources found. Results are displayed below; all remain unverified.";
+  aiStatus.textContent="AI review: Preparing a limited evidence summary…";
+  // Keep the prompt below the server's 12,000-character limit. Never let an AI
+  // assessment failure erase or relabel the independently returned search results.
+  const evidence=all.slice(0,8).map(x=>({
+   type:x.researchType,title:String(x.title||"").slice(0,220),url:x.url,
+   description:String(x.description||"").slice(0,450),
+   content:String(x.markdown||"").slice(0,700),retrievedAt:x.retrievedAt||""
+  }));
+  const prompt="You are Cash Buyer & Flipper Intelligence AI. Assess public web research for market "+market+", property focus "+type+", lookback "+days+" days. For nationwide searches, distinguish genuinely national datasets from individual county or city sources and clearly identify the jurisdiction covered by each source. Classify each candidate as verified closing, public-record lead only, listing/marketing signal, professional/network contact, or irrelevant. Do not call any buyer verified unless source evidence establishes a closed transaction and identity. A past cash purchase is not proof of current funds. Never infer cash from absence of a mortgage. State unknowns including county coverage, deed type, arm's-length status, closing date and financing. Identify unrelated jurisdictions and recommend excluding them from a local-market shortlist. Do not fabricate contacts or closings. Return concise ranked next steps and a verification checklist. Evidence: "+JSON.stringify(evidence);
+  try{
+   const ai=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
+   const ad=await ai.json().catch(()=>({}));
+   if(!ai.ok)throw new Error(ad.error||"AI assessment failed (HTTP "+ai.status+").");
+   $("cfiAnalysis").textContent=ad.answer||"No AI assessment returned.";
+   $("cfiAnalysis").classList.remove("hidden");
+   aiStatus.textContent="AI review complete. Search results remain unverified until independently checked.";
+  }catch(err){
+   aiStatus.textContent="AI review unavailable: "+(err.message||"Unknown AI error")+". Your "+all.length+" search results are still available above.";
+  }finally{
+   btn.disabled=false;btn.textContent="Run cash buyer intelligence";
+  }
  }
  function saveReview(){
   const name=$("cfiBuyerName").value.trim();if(!name){$("cfiSaveStatus").textContent="Enter a buyer or company name first.";return}
