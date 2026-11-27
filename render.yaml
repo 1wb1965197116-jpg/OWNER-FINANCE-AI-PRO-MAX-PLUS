@@ -14,9 +14,13 @@ services:
         value: gpt-4.1-mini
       - key: DATABASE_URL
         sync: false
-      - key: WORKSPACE_ENCRYPTION_KEY
+      - key: ADMIN_DATABASE_URL
+        sync: false
+      - key: DB_SETUP_TOKEN
         sync: false
       - key: OWNER_BOOTSTRAP_TOKEN
+        sync: false
+      - key: WORKSPACE_ENCRYPTION_KEY
         sync: false
       - key: FIRECRAWL_API_KEY
         sync: false
