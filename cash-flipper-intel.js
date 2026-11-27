@@ -32,7 +32,7 @@
     <div class="span2 actions"><button class="primary" type="button" id="cfiSave">Save verification review</button><span id="cfiSaveStatus" class="muted"></span></div>
    </div><div id="cfiBuyerReviews" class="crm-list empty">No buyer verification reviews saved.</div></article>
    <article class="panel"><h3>Funding-ready rule</h3><p>Only label a buyer <b>Funding verified for this deal</b> when a recent closing is independently confirmed, the buyer's identity/entity is checked, and current deal-specific funds are verified through a trusted closing professional or financial institution using a secure process. A past cash deed alone does not establish present liquidity. Do not upload bank credentials or full account numbers.</p><p class="notice">Contact local professionals only through lawful, permission-based channels. Do not scrape login-only MLS portals, bypass access controls, or bulk-message people. Listing sites and public profiles are discovery signals, not proof of purchase capacity.</p></article>`;
-  $("main").appendChild(section);
+  const main=document.querySelector(".main"); const footer=main&&main.querySelector("footer"); if(footer)main.insertBefore(section,footer); else if(main)main.appendChild(section);
   b.addEventListener("click",()=>{document.querySelectorAll(".navitem").forEach(x=>x.classList.toggle("active",x===b));document.querySelectorAll(".view").forEach(x=>x.classList.toggle("active",x===section));$("pageTitle").textContent="Cash Buyer & Flipper AI";});
   $("cfiForm").addEventListener("submit",run);
   $("cfiSave").addEventListener("click",saveReview);
