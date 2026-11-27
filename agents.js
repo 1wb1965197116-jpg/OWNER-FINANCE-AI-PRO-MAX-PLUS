@@ -40,7 +40,7 @@
  }
  function renderBuyers(){
   const host=el("agentBuyerList");if(!host)return;
-  el("agentBuyerCount").textContent=buyerProfiles.length;
+  el("agentBuyerCount").textContent=buyerProfiles.length;el("agentDealCount").textContent=currentDeals().length;
   if(!buyerProfiles.length){host.className="empty";host.textContent="No buyer profiles saved yet. Add buyers you know or research public investor businesses, then verify their details.";return}
   host.className="crm-list";
   host.innerHTML=buyerProfiles.map(b=>'<div class="crm-card"><div><b>'+esc(b.company||b.name)+'</b><small>'+esc(b.name||"Contact not named")+' · '+esc(b.status||"Needs verification")+'</small><small>'+esc([b.states,b.cities,b.zipCodes].filter(Boolean).join(" · ")||"Market not recorded")+'</small><small>Budget: '+esc(b.minBudget?money(b.minBudget):"Any minimum")+' – '+esc(b.maxBudget?money(b.maxBudget):"Not set")+' · '+esc(b.propertyTypes||"Property type unknown")+'</small><small>Strategies: '+esc(b.strategies||"Not recorded")+' · Contact permission: '+esc(b.permission||"Not recorded")+'</small><small>POF: '+esc(b.proofFunds||"Not reviewed")+'</small></div><div><span class="crm-flag">'+esc(b.status||"Needs verification")+'</span></div><div class="actions"><button class="textbtn" data-buyer-edit="'+esc(b.id)+'">Edit</button><button class="textbtn" data-buyer-delete="'+esc(b.id)+'">Delete</button></div></div>').join("");
@@ -65,7 +65,7 @@
   go("agents");
  }
  function renderOutreach(){
-  const host=el("agentOutreachList");if(!host)return;
+  const host=el("agentOutreachList");if(!host)return;el("agentDraftCount").textContent=outreachDrafts.length;
   if(!outreachDrafts.length){host.className="empty";host.textContent="No buyer outreach drafts yet.";return}
   host.className="crm-list";host.innerHTML=outreachDrafts.slice(0,20).map(x=>'<div class="crm-card"><div><b>'+esc(x.buyer)+' · '+esc(x.address)+'</b><small>'+esc(x.status)+' · '+(x.eligible?"Opt-in recorded":"Permission needs review")+'</small><small>Prepared '+esc(new Date(x.created).toLocaleString())+'</small></div><div><span class="crm-flag">'+x.score+'/100</span></div><div class="actions"><button class="textbtn" data-draft-view="'+esc(x.id)+'">View draft</button><button class="textbtn" data-draft-copy="'+esc(x.id)+'">Copy draft</button></div></div>').join("");
   host.querySelectorAll("[data-draft-view]").forEach(btn=>btn.onclick=()=>{const x=outreachDrafts.find(y=>y.id===btn.dataset.draftView);if(x)el("agentDraftOutput").textContent=x.subject+"\n\n"+x.body});
@@ -74,7 +74,7 @@
  async function researchBuyers(e){
   e.preventDefault();const location=el("buyerResearchLocation").value.trim(),kind=el("buyerResearchKind").value;
   const out=el("buyerResearchResults"),btn=el("buyerResearchButton");btn.disabled=true;btn.textContent="Researching…";out.className="empty";out.textContent="Searching public web sources for buyer businesses and investor networks…";
-  const query="publicly listed real estate cash home buyers property investors "+kind+" buyer acquisition companies investor groups real estate investment firms contact information";
+  const buyerScope=settings.buyerTypes==="cash"?"cash buyers only":settings.buyerTypes==="both"?"cash buyers and financed real estate investors":"cash buyers, financed investors, landlords, builders and developers";const query="publicly listed real estate "+buyerScope+" "+kind+" buyer acquisition companies investor groups real estate investment firms contact information";
   try{const r=await fetch("/api/research/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({query,location,limit:8})}),data=await r.json();if(!r.ok)throw new Error(data.error||"Buyer research unavailable.");searchResults=data.results||[];if(!searchResults.length){out.className="empty";out.textContent="No useful public search results returned. Try a broader market or different buyer category.";return}
    out.className="crm-list";out.innerHTML=searchResults.map((x,i)=>'<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.description||"Public webpage result")+'</small><small><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open source</a></small></div><div><span class="crm-flag">Unverified lead</span></div><div class="actions"><button class="textbtn" data-research-add="'+i+'">Add to buyer review list</button></div></div>').join("");
    out.querySelectorAll("[data-research-add]").forEach(b=>b.onclick=()=>{const x=searchResults[Number(b.dataset.researchAdd)];if(!x)return;el("buyerCompany").value=x.title;el("buyerNotes").value="Found via public web research. Source: "+x.url+"\n"+(x.description||"")+"\nVerify identity, buying activity, contact details, consent and investment criteria before use.";el("buyerStatus").value="Needs verification";el("buyerPermission").value="Not recorded";el("buyerCompany").focus();el("agentBuyerFormStatus").textContent="Research result loaded into the buyer profile form. Verify all details before saving."});
