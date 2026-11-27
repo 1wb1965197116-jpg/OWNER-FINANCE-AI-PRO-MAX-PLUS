@@ -106,3 +106,23 @@ The Multi-Agent AI Team view adds five role-based analyses using the existing se
 - The app can prepare buyer outreach drafts, but this release does not send email, SMS, calls, offers or contracts. A messaging provider integration and explicit owner approval workflow are required before sending is enabled.
 - Buyers marked Do not contact, No permission or Opted out are blocked from draft preparation. A buyer marked Active with documented opt-in may receive a draft for owner review; no message is sent automatically.
 - Verify applicable state and federal privacy, marketing, real-estate licensing, wholesaling, assignment, disclosure and brokerage requirements before any transaction or outreach.
+
+
+## Cash Buyer & Flipper Intelligence AI (sixth specialist)
+
+The `Cash Buyer & Flipper AI` workspace is loaded from `cash-flipper-intel.js`. It uses the existing server-side Firecrawl public research endpoint and OpenAI analysis endpoint to:
+- Search for recent deed transfers and reported cash purchases in a selected market and look-back window.
+- Find public evidence of repeat investor purchases, renovations and resales.
+- Discover local investor-friendly agents, brokers, title/settlement professionals and REIA networks for permission-based networking.
+- Preserve source URLs and retrieval timestamps, then classify findings as public-record leads, listing/marketing signals, professional/network contacts or irrelevant.
+- Save buyer verification reviews locally, separately from the buyer profile list.
+
+### Critical verification rule
+
+A search result is never automatically a qualified buyer. A deed record is a lead until the buyer/entity, arm's-length transaction, closing date and purchase details are independently checked. Do not infer an all-cash purchase solely because no mortgage appears in the data. A past cash closing does not prove current liquidity. Funding readiness requires deal-specific funding confirmation through a trusted closing professional or financial institution, plus a recently confirmed closing history and a verified ability to meet the buyer's stated closing timeline. Reconfirm before contract.
+
+### Data provider limitations
+
+This release uses Firecrawl public web search plus AI review. It does not yet have direct ATTOM, BatchData, county recorder, MLS or listing-platform API integrations. Those require separate provider access, licensing and credentials. County recording coverage and delays vary; a recorded deed is not always an arm's-length sale or the latest closing. Never scrape login-only MLS systems, bypass access controls or bulk-message contacts.
+
+The new verification-review list is browser-local under `ofpmplus_cash_flipper_intel_v1`. Export/backup inclusion must be verified separately; this release does not claim that the new list is included in encrypted cloud backup.
