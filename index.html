@@ -55,6 +55,39 @@
 <div class="formgrid"><label>Market<select id="llMarket"><option>Ocean County, NJ</option><option>New Jersey</option><option>United States</option></select></label><label>Look-back period<select id="llDays"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 180 days</option><option value="365">Last 12 months</option><option value="730">Last 24 months</option></select></label><label>Property focus<select id="llProperty"><option>All property types</option><option>Single-family homes</option><option>Small multifamily (2–4 units)</option><option>Vacant land</option><option>Commercial property</option></select></label><label>Keyword / city / ZIP<input id="llKeyword" placeholder="Optional: Jackson, Toms River, 08701"></label></div></article>
 <article class="panel"><div class="panelhead"><div><h3>Lead Lists</h3><p>Counts reflect records actually returned or imported—not estimates or advertised database totals.</p></div><span class="tag" id="llCount">0 research results</span></div><div id="llCategories" class="lead-category-grid"></div><div class="actions" style="margin-top:14px"><button class="primary" id="llRun" type="button">Research selected categories</button><button class="secondary" id="llSelectAll" type="button">Select all 20</button><button class="secondary" id="llClear" type="button">Clear selection</button></div><p class="notice" id="llStatus">Select categories, then run research. Public web findings are unverified research leads, not confirmed property records.</p></article>
 <article class="panel"><div class="panelhead"><div><h3>Research results</h3><p>Each result retains its source URL, retrieval date, category and verification status.</p></div><button class="secondary small" id="llExport" type="button">Export results CSV</button></div><div id="llResults" class="empty">No searches run yet.</div></article>
+
+<article class="panel" id="piProfile">
+<div class="panelhead"><div><h3>Property Valuation, Equity & Debt Intelligence</h3><p>Review property value history, opportunity metrics, mortgages, liens and last-sale information.</p></div><span class="tag">Owner review required</span></div>
+<div class="formgrid">
+<label class="span2">Property address<input id="piAddress" placeholder="Street address"></label>
+<label>City<input id="piCity" placeholder="City"></label><label>State<input id="piState" value="NJ"></label><label>ZIP<input id="piZip"></label>
+<label>Property type<select id="piType"><option>Single-family</option><option>2–4 unit multifamily</option><option>Condo / townhouse</option><option>Vacant land</option><option>Commercial</option><option>Other</option></select></label>
+</div>
+<div class="pi-columns">
+<section class="pi-card"><h4>Value & history</h4>
+<label>Estimated current value ($)<input id="piValue" type="number" min="0"></label>
+<label>Value 5 years ago ($)<input id="piFive" type="number" min="0"></label><label>Value 3 years ago ($)<input id="piThree" type="number" min="0"></label>
+<label>Value 1 year ago ($)<input id="piOne" type="number" min="0"></label><label>Value 6 months ago ($)<input id="piSix" type="number" min="0"></label>
+</section>
+<section class="pi-card"><h4>Opportunity & comparable sales</h4>
+<label>Monthly rent ($)<input id="piRent" type="number" min="0"></label><label>Average comparable sale ($)<input id="piComp" type="number" min="0"></label>
+<label>Comparable days on market<input id="piDom" type="number" min="0"></label><label>Estimated repairs ($)<input id="piRepairs" type="number" min="0"></label>
+<label>Wholesale value factor (%)<input id="piFactor" type="number" min="1" max="100" value="70"></label>
+</section>
+<section class="pi-card"><h4>Mortgage & debt</h4>
+<label>Open mortgages (count)<input id="piMortgages" type="number" min="0"></label><label>Estimated mortgage balance ($)<input id="piBalance" type="number" min="0"></label>
+<label>Involuntary liens (count)<input id="piLiens" type="number" min="0"></label><label>Recorded lien amount ($)<input id="piLienAmount" type="number" min="0"></label>
+</section>
+<section class="pi-card"><h4>Last sale & documents</h4>
+<label>Public-record sale price ($)<input id="piSale" type="number" min="0"></label><label>Sale / recording date<input id="piSaleDate" type="date"></label>
+<label>MLS sale price ($)<input id="piMls" type="number" min="0"></label><label>Document type<input id="piDoc" placeholder="Grant deed, warranty deed..."></label>
+<label>Source URL<input id="piSource" type="url" placeholder="Public record / provider source"></label>
+</section></div>
+<div class="actions"><button class="primary" id="piCalculate" type="button">Calculate property metrics</button><button class="secondary" id="piSave" type="button">Save property profile</button><button class="secondary" id="piSnapshot" type="button">Record today's value</button><button class="secondary" id="piClear" type="button">Clear form</button></div>
+<div id="piMetrics"><div class="empty">Enter available information to calculate estimated equity, value changes, wholesale screen and rental yield.</div></div>
+<div class="pi-history"><h4>Property value history</h4><div id="piHistory" class="empty">No value snapshots recorded.</div></div>
+<p class="notice">This release does not perform automated appraisals, mortgage-balance lookups, lien verification, MLS searches, title searches or document retrieval. Balances and values must be checked against current source records. Profiles are saved in this browser on this device.</p>
+</article>
 <article class="panel"><div class="panelhead"><div><h3>Import authorized property / lead records</h3><p>Import a CSV from a provider, county source or your own records. Imported rows are marked as imported—not independently verified.</p></div></div><label>CSV file<input id="llCsvFile" type="file" accept=".csv,text/csv"></label><label style="display:block;margin-top:10px">Or paste CSV<textarea id="llCsvText" rows="4" placeholder="Include a header row such as address, city, state, ZIP, owner, category, sale date, price, source URL"></textarea></label><div class="actions" style="margin-top:12px"><button class="primary" id="llImport" type="button">Import records</button><button class="secondary" id="llSavedExport" type="button">Export imported records</button><span class="muted" id="llImportStatus">No records imported.</span></div><div id="llImported" class="crm-list" style="margin-top:12px"></div></article>
 <p class="notice">Data access and coverage vary by jurisdiction and provider. This module uses public web research plus CSV records you supply; it does not include a paid nationwide deed, MLS, bankruptcy, lien, foreclosure or skip-tracing feed unless separately licensed and connected. Do not infer ownership, distress, equity, cash funding or consent from a category label. Follow applicable privacy, consumer-protection, marketing, fair-housing and real-estate laws. No outreach, offers, contracts or money movement occur automatically.</p>
 </section>
@@ -265,4 +298,4 @@
  <article class="panel"><div class="panelhead"><div><h3>Property-to-buyer matching</h3><p>Rank saved buyers against a property using recorded criteria. Match scores are screening estimates, not buyer commitments.</p></div></div><label>Select property<select id="agentMatchDeal"><option value="">Choose a saved property</option></select></label><div id="agentMatchResults" class="empty">Choose a saved property to see ranked buyer matches.</div></article>
  <article class="panel"><div class="panelhead"><div><h3>Qualified buyer outreach drafts</h3><p>Drafts require documented opt-in, active buyer status and your review. Sending is not connected in this release.</p></div></div><p id="agentOutreachNotice" class="muted" aria-live="polite">No message is sent by this system.</p><div id="agentOutreachList" class="empty">No buyer outreach drafts yet.</div><pre id="agentDraftOutput" class="draft" aria-live="polite"></pre><p class="notice">Before contacting anyone, verify consent and applicable federal/state marketing, privacy, brokerage, wholesaling and assignment rules. No false scarcity, fabricated offers, or disclosure of another buyer's confidential terms.</p></article>
 </section>
-<footer>OWNER FINANCE AI PRO MAX PLUS <span>Build 1.1 · Multi-Agent · Human approval required</span></footer></main></div><script src="app.js"></script><script src="agents.js"></script><script src="cash-flipper-intel.js"></script><script src="lead-lists.js"></script></body></html>
+<footer>OWNER FINANCE AI PRO MAX PLUS <span>Build 1.1 · Multi-Agent · Human approval required</span></footer></main></div><script src="app.js"></script><script src="agents.js"></script><script src="cash-flipper-intel.js"></script><script src="lead-lists.js"></script><script src="property-intel.js"></script></body></html>
