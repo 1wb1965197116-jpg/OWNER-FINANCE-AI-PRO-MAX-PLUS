@@ -96,10 +96,13 @@
   aiStatus.textContent="AI review: Preparing a limited evidence summary…";
   // Keep the prompt below the server's 12,000-character limit. Never let an AI
   // assessment failure erase or relabel the independently returned search results.
-  const evidence=all.slice(0,8).map(x=>({
-   type:x.researchType,title:String(x.title||"").slice(0,220),url:x.url,
-   description:String(x.description||"").slice(0,450),
-   content:String(x.markdown||"").slice(0,700),retrievedAt:x.retrievedAt||""
+  const evidence=all.slice(0,5).map(x=>({
+   type:String(x.researchType||"").slice(0,20),
+   title:String(x.title||"").slice(0,140),
+   url:String(x.url||"").slice(0,300),
+   description:String(x.description||"").slice(0,280),
+   content:String(x.markdown||"").slice(0,280),
+   retrievedAt:String(x.retrievedAt||"").slice(0,40)
   }));
   const prompt="You are Cash Buyer & Flipper Intelligence AI. Assess public web research for market "+market+", property focus "+type+", lookback "+days+" days. For nationwide searches, distinguish genuinely national datasets from individual county or city sources and clearly identify the jurisdiction covered by each source. Classify each candidate as verified closing, public-record lead only, listing/marketing signal, professional/network contact, or irrelevant. Do not call any buyer verified unless source evidence establishes a closed transaction and identity. A past cash purchase is not proof of current funds. Never infer cash from absence of a mortgage. State unknowns including county coverage, deed type, arm's-length status, closing date and financing. Identify unrelated jurisdictions and recommend excluding them from a local-market shortlist. Do not fabricate contacts or closings. Return concise ranked next steps and a verification checklist. Evidence: "+JSON.stringify(evidence);
   try{
