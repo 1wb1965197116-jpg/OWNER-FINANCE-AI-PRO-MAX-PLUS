@@ -14,7 +14,7 @@
   section.innerHTML=`
    <article class="panel"><div class="panelhead"><div><h3>Cash Buyer & Flipper Intelligence AI</h3><p>Find recent investor purchases, repeat flippers and local real-estate professionals. Every discovery starts as an unverified lead.</p></div><span class="tag">Sixth AI specialist</span></div>
    <form id="cfiForm" class="formgrid">
-    <label class="span2">Market, city/state, county or ZIP<input id="cfiMarket" value="United States" required placeholder="Example: Jackson, NJ or Ocean County, NJ"></label>
+    <label class="span2">Market, city/state, county or ZIP<input id="cfiMarket" value="Ocean County, NJ" required placeholder="Example: Ocean County, NJ or United States"></label>
     <label>Look-back period<select id="cfiWindow"><option value="90">Last 90 days</option><option value="180" selected>Last 180 days</option><option value="365">Last 12 months</option><option value="730">Last 24 months</option></select></label>
     <label>Property focus<select id="cfiType"><option>Single-family and small multifamily</option><option>Single-family flips</option><option>2–4 unit multifamily</option><option>5+ unit multifamily</option><option>Land and development</option><option>Commercial</option><option>All property types</option></select></label>
     <label class="span2">Research targets<select id="cfiTargets" multiple size="4"><option selected value="sales">Recent recorded cash sales and deed transfers</option><option selected value="flippers">Repeat buyers, flippers and resale activity</option><option selected value="pros">Local agents, brokers, title and closing professionals</option><option value="networks">REIA groups and investor networks</option></select><small class="muted">On iPhone, tap to select or deselect multiple targets.</small></label>
@@ -47,15 +47,16 @@
   btn.disabled=true;btn.textContent="Researching…";out.className="crm-list";out.innerHTML="";
   $("cfiAnalysis").classList.add("hidden");
   aiStatus.textContent="AI review: Waiting for search results.";
+  const nationwide=market.toLowerCase()==="united states"||market.toLowerCase()==="nationwide";
   const targets={
-   sales: market.toLowerCase()==="united states"
+   sales: nationwide
     ?"nationwide United States real estate investor purchases recorded deed transfers public property sales datasets multi-state transaction data"
-    :"recorded real estate deed transfers property sales county recorder "+market+" investor purchases public records",
-   flippers: market.toLowerCase()==="united states"
+    :"Ocean County New Jersey recorded deed transfers property sales buyer grantee seller grantor instrument number recording date county clerk public records "+market+" Jackson Toms River Brick Lakewood recent real estate sales",
+   flippers: nationwide
     ?"United States nationwide real estate house flippers repeat property investors buy renovate resell documented transactions"
-    :"real estate investors house flippers repeat property buyers purchases resales closed transactions "+market,
-   pros:"real estate investor friendly agents brokers title companies settlement closing attorneys escrow officers "+market+" investor networking",
-   networks:"real estate investor association REIA meetups networking groups active house flippers cash buyers "+market
+    :"Ocean County NJ repeat real estate investor buyers LLC purchases resales house flippers recorded transactions Jackson Toms River Brick Lakewood "+market,
+   pros:"Ocean County New Jersey investor friendly agents brokers title companies settlement closing attorneys escrow officers REIA investor networking "+market,
+   networks:"Ocean County New Jersey real estate investor association REIA meetups networking groups active house flippers cash buyers "+market
   };
   let all=[];
   try{
@@ -74,37 +75,50 @@
   }
   const seen=new Set();
   all=all.filter(x=>{const k=x.url;if(!k||seen.has(k))return false;seen.add(k);return true});
+  const localMode=!nationwide, localLeads=[], contextOnly=[];
+  const oceanTerms=["ocean county","jackson nj","toms river","brick township","brick, nj","lakewood nj","manchester township nj","berkeley township nj","lacey township nj","stafford township nj","barnegat nj","point pleasant nj","bayville nj","forked river","seaside heights nj","long beach island"];
+  const marketTerms=market.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!["county","township","city","state","new","jersey"].includes(w));
+  const terms=market.toLowerCase().includes("ocean county")?oceanTerms:marketTerms;
+  const otherPlaces=/\b(ohio|pennsylvania|north carolina|south carolina|florida|tennessee|texas|georgia|california|virginia|franklin county|clearfield county|wilson county|muskingum county|raleigh|fayetteville)\b/i;
+  for(const x of all){
+   const hay=[x.title,x.description,x.markdown,x.url].join(" ").toLowerCase();
+   const local=terms.some(t=>hay.includes(t)) || (market.toLowerCase().includes("ocean county") && /\bnew jersey\b|\bn\.?j\.?\b/i.test(hay) && /deed|transfer|sold|sale|real estate|property/i.test(hay) && !otherPlaces.test(hay));
+   x.marketRelevance=!localMode?"nationwide context":local?"local-market candidate":"context only";
+   (local||!localMode?localLeads:contextOnly).push(x);
+  }
   if(!all.length){
    out.className="empty";out.textContent="No results returned. Try a narrower city/county or another research target.";
    searchStatus.textContent="Search completed; no usable results.";
    aiStatus.textContent="AI review: Not run because there were no usable results.";
    btn.disabled=false;btn.textContent="Run cash buyer intelligence";return;
   }
+  const display=localMode?[...localLeads,...contextOnly]:all;
   out.className="crm-list";
-  out.innerHTML=all.map((x,i)=>{
+  out.innerHTML=(localMode?'<div class="notice"><b>Local-market candidates: '+localLeads.length+'</b> · General/context sources: '+contextOnly.length+'. Context sources are not local buyer leads.</div>':"")+display.map((x,i)=>{
    const d=Date.parse(x.retrievedAt||"");
    const retrieved=Number.isFinite(d)?new Date(d).toLocaleString():"date unavailable";
-   return '<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.researchType.toUpperCase())+' · '+esc(x.description||"Public source result")+'</small><small><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open source</a> · Retrieved '+esc(retrieved)+'</small></div><div><span class="crm-flag">Unverified</span></div><div class="actions"><button class="textbtn" data-cfi-review="'+i+'">Add to verification review</button></div></div>';
+   return '<div class="crm-card"><div><b>'+esc(x.title)+'</b><small>'+esc(x.researchType.toUpperCase())+' · '+esc(x.marketRelevance||"Unclassified")+'</small><small>'+esc(x.description||"Public source result")+'</small><small><a href="'+esc(x.url)+'" target="_blank" rel="noopener noreferrer">Open source</a> · Retrieved '+esc(retrieved)+'</small></div><div><span class="crm-flag">Unverified</span></div><div class="actions"><button class="textbtn" data-cfi-review="'+i+'">Add to verification review</button></div></div>';
   }).join("");
   out.querySelectorAll("[data-cfi-review]").forEach(b=>b.addEventListener("click",()=>{
-   const x=all[Number(b.dataset.cfiReview)];
+   const x=display[Number(b.dataset.cfiReview)];
    $("cfiBuyerName").value=x.title;
    $("cfiEvidence").value="Research type: "+x.researchType+"\nSource: "+x.url+"\nRetrieved: "+(x.retrievedAt||"unknown")+"\nFinding: "+(x.description||"")+"\n\nVerify legal buyer identity, recorded closing and current deal-specific funding.";
    $("cfiSaveStatus").textContent="Research lead loaded. Complete the independent checks before marking verified.";
   }));
-  searchStatus.textContent="Search complete: "+all.length+" distinct public sources found. Results are displayed below; all remain unverified.";
+  searchStatus.textContent="Search complete: "+all.length+" distinct public sources found. "+(localMode?(localLeads.length+" local-market candidates; "+contextOnly.length+" context-only sources separated. All remain unverified."):"Nationwide research results; all remain unverified.");
   aiStatus.textContent="AI review: Preparing a limited evidence summary…";
   // Keep the prompt below the server's 12,000-character limit. Never let an AI
   // assessment failure erase or relabel the independently returned search results.
-  const evidence=all.slice(0,5).map(x=>({
+  const evidence=(localMode?localLeads:all).concat(localMode?contextOnly:[]).slice(0,5).map(x=>({
    type:String(x.researchType||"").slice(0,20),
+   marketRelevance:String(x.marketRelevance||"").slice(0,40),
    title:String(x.title||"").slice(0,140),
    url:String(x.url||"").slice(0,300),
    description:String(x.description||"").slice(0,280),
    content:String(x.markdown||"").slice(0,280),
    retrievedAt:String(x.retrievedAt||"").slice(0,40)
   }));
-  const prompt="You are Cash Buyer & Flipper Intelligence AI. Assess public web research for market "+market+", property focus "+type+", lookback "+days+" days. For nationwide searches, distinguish genuinely national datasets from individual county or city sources and clearly identify the jurisdiction covered by each source. Classify each candidate as verified closing, public-record lead only, listing/marketing signal, professional/network contact, or irrelevant. Do not call any buyer verified unless source evidence establishes a closed transaction and identity. A past cash purchase is not proof of current funds. Never infer cash from absence of a mortgage. State unknowns including county coverage, deed type, arm's-length status, closing date and financing. Identify unrelated jurisdictions and recommend excluding them from a local-market shortlist. Do not fabricate contacts or closings. Return concise ranked next steps and a verification checklist. Evidence: "+JSON.stringify(evidence);
+  const prompt="You are Cash Buyer & Flipper Intelligence AI. Assess public web research for market "+market+", property focus "+type+", lookback "+days+" days. For local searches, assess local-market candidates separately from context-only sources. Reject unrelated county/state deed lists as local leads. Identify the exact jurisdiction; a generic New Jersey mention is not proof of Ocean County. For nationwide searches, distinguish genuinely national datasets from individual county or city sources. Classify each candidate as verified closing, public-record lead only, listing/marketing signal, professional/network contact, or irrelevant. Do not call any buyer verified unless source evidence establishes a closed transaction and identity. A past cash purchase is not proof of current funds. Never infer cash from absence of a mortgage. State unknowns including county coverage, deed type, arm's-length status, closing date and financing. Identify unrelated jurisdictions and recommend excluding them from a local-market shortlist. Do not fabricate contacts or closings. Return concise ranked next steps and a verification checklist. Evidence: "+JSON.stringify(evidence);
   try{
    const ai=await fetch("/api/ai/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt})});
    const ad=await ai.json().catch(()=>({}));
