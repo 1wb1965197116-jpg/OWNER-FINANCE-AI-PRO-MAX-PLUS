@@ -48,3 +48,14 @@
 @media(max-width:620px){#motivatedLeadList .crm-card{grid-template-columns:1fr}#motivatedLeadList .crm-card>div:nth-child(2){text-align:left}}
 
 #view-agents .stats{margin:14px 0}#view-agents .stat{min-width:0}#view-agents .stat strong{font-size:20px}#view-agents .crm-card a{font-size:11px;overflow-wrap:anywhere}#view-agents .crm-card small{white-space:normal;overflow-wrap:anywhere}#view-agents #agentTeamOutput .crm-card{grid-template-columns:1fr}#view-agents #agentTeamOutput .crm-card small{white-space:pre-wrap;line-height:1.6;color:var(--ink);font-size:12px}#view-agents #agentDraftOutput{white-space:pre-wrap;overflow-wrap:anywhere}#view-agents #agentDraftOutput:empty{display:none}#view-agents #agentMatchDeal{display:block;width:100%;margin:7px 0 12px;padding:11px;border:1px solid #dce3ed;border-radius:8px;background:#fff;color:var(--ink)}@media(max-width:620px){#view-agents .stats{grid-template-columns:1fr 1fr}}
+
+/* AI Lead Lists PRO */
+.lead-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.lead-category{display:flex;align-items:center;gap:10px;text-align:left;min-height:68px;padding:10px;border:1px solid var(--line,#dce3ed);border-radius:12px;background:var(--panel,#fff);color:var(--ink);cursor:pointer}
+.lead-category .ll-icon{font-size:23px;color:var(--accent,#168b94);width:30px;text-align:center}
+.lead-category b{display:block;font-size:13px}.lead-category small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.lead-category.selected{border:2px solid var(--accent,#168b94);background:rgba(20,145,153,.08)}
+#llResults .crm-card,#llImported .crm-card{grid-template-columns:minmax(0,1fr) auto}
+#llResults .crm-card small{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:850px){.lead-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.lead-category-grid{grid-template-columns:1fr}.lead-category{min-height:58px}}
