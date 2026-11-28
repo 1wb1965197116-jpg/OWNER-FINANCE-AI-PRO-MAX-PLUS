@@ -82,7 +82,7 @@
   const otherPlaces=/\b(ohio|pennsylvania|north carolina|south carolina|florida|tennessee|texas|georgia|california|virginia|franklin county|clearfield county|wilson county|muskingum county|raleigh|fayetteville)\b/i;
   for(const x of all){
    const hay=[x.title,x.description,x.markdown,x.url].join(" ").toLowerCase();
-   const local=terms.some(t=>hay.includes(t)) || (market.toLowerCase().includes("ocean county") && /\bnew jersey\b|\bn\.?j\.?\b/i.test(hay) && /deed|transfer|sold|sale|real estate|property/i.test(hay) && !otherPlaces.test(hay));
+   const local=terms.some(t=>hay.includes(t));
    x.marketRelevance=!localMode?"nationwide context":local?"local-market candidate":"context only";
    (local||!localMode?localLeads:contextOnly).push(x);
   }
